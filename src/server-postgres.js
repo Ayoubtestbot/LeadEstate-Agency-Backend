@@ -91,23 +91,31 @@ const initDatabase = async () => {
       ADD COLUMN IF NOT EXISTS assigned_to VARCHAR(255)
     `);
 
-    // Drop and recreate properties table with correct schema
-    console.log('🔧 Recreating properties table with simplified schema...');
-    await pool.query(`DROP TABLE IF EXISTS properties`);
+    // Force recreate properties table with correct schema
+    console.log('🔧 Force recreating properties table...');
+    try {
+      await pool.query(`DROP TABLE IF EXISTS properties CASCADE`);
+      console.log('✅ Dropped old properties table');
+    } catch (error) {
+      console.log('⚠️ No existing properties table to drop');
+    }
+
     await pool.query(`
       CREATE TABLE properties (
         id VARCHAR(255) PRIMARY KEY,
         title VARCHAR(255) NOT NULL,
-        type VARCHAR(255),
-        price DECIMAL,
-        address VARCHAR(255),
-        city VARCHAR(255),
-        surface DECIMAL,
-        description TEXT,
+        type VARCHAR(255) DEFAULT 'apartment',
+        price DECIMAL DEFAULT 0,
+        address VARCHAR(255) DEFAULT '',
+        city VARCHAR(255) DEFAULT '',
+        surface DECIMAL DEFAULT 0,
+        description TEXT DEFAULT '',
+        image_url VARCHAR(500) DEFAULT '',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+    console.log('✅ Created new properties table with correct schema');
 
     console.log('✅ Database tables initialized and migrated successfully');
   } catch (error) {
@@ -503,6 +511,7 @@ app.post('/api/properties', async (req, res) => {
       city: propertyData.city,
       surface: propertyData.surface ? parseFloat(propertyData.surface) : null,
       description: propertyData.description,
+      image_url: propertyData.image_url || '',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
@@ -510,13 +519,13 @@ app.post('/api/properties', async (req, res) => {
     console.log('💾 Saving property to database:', newProperty);
 
     const result = await pool.query(`
-      INSERT INTO properties (id, title, type, price, address, city, surface, description, created_at, updated_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      INSERT INTO properties (id, title, type, price, address, city, surface, description, image_url, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       RETURNING *
     `, [
       newProperty.id, newProperty.title, newProperty.type, newProperty.price,
       newProperty.address, newProperty.city, newProperty.surface, newProperty.description,
-      newProperty.created_at, newProperty.updated_at
+      newProperty.image_url, newProperty.created_at, newProperty.updated_at
     ]);
 
     console.log('✅ Property saved successfully:', result.rows[0]);
@@ -535,10 +544,20 @@ app.post('/api/properties', async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Error creating property:', error);
+    console.error('❌ Error details:', {
+      message: error.message,
+      code: error.code,
+      detail: error.detail,
+      stack: error.stack
+    });
     res.status(500).json({
       success: false,
       message: 'Failed to create property',
-      error: process.env.NODE_ENV === 'development' ? error.message : 'Database error'
+      error: error.message,
+      details: {
+        code: error.code,
+        detail: error.detail
+      }
     });
   }
 });
@@ -559,13 +578,14 @@ app.put('/api/properties/:id', async (req, res) => {
         city = COALESCE($6, city),
         surface = COALESCE($7, surface),
         description = COALESCE($8, description),
-        updated_at = $9
+        image_url = COALESCE($9, image_url),
+        updated_at = $10
       WHERE id = $1
       RETURNING *
     `, [
       id, updateData.title, updateData.type, updateData.price ? parseFloat(updateData.price) : null,
       updateData.address, updateData.city, updateData.surface ? parseFloat(updateData.surface) : null,
-      updateData.description, new Date().toISOString()
+      updateData.description, updateData.image_url, new Date().toISOString()
     ]);
 
     if (result.rows.length === 0) {
