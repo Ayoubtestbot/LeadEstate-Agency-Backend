@@ -156,33 +156,52 @@ app.get('/api/leads', async (req, res) => {
 
 app.post('/api/leads', async (req, res) => {
   try {
+    console.log('📝 Received lead data:', req.body);
+
     const leadData = req.body;
     const newLead = {
       id: generateId(),
-      ...leadData,
+      name: leadData.name || '',
+      email: leadData.email || '',
+      phone: leadData.phone || '',
+      city: leadData.city || '',
+      source: leadData.source || 'website',
+      propertyType: leadData.propertyType || 'house',
+      budget: leadData.budget || '',
+      notes: leadData.notes || '',
+      status: leadData.status || 'new',
+      assignedTo: leadData.assignedTo || null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
-    
-    await pool.query(`
+
+    console.log('💾 Saving lead to database:', newLead);
+
+    const result = await pool.query(`
       INSERT INTO leads (id, name, email, phone, city, source, property_type, budget, notes, status, assigned_to, created_at, updated_at)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      RETURNING *
     `, [
       newLead.id, newLead.name, newLead.email, newLead.phone, newLead.city,
       newLead.source, newLead.propertyType, newLead.budget, newLead.notes,
       newLead.status, newLead.assignedTo, newLead.created_at, newLead.updated_at
     ]);
-    
+
+    console.log('✅ Lead saved successfully:', result.rows[0]);
+
     res.status(201).json({
       success: true,
       data: newLead,
       message: 'Lead created successfully'
     });
   } catch (error) {
-    console.error('Error creating lead:', error);
+    console.error('❌ Error creating lead:', error);
+    console.error('❌ Error details:', error.message);
+    console.error('❌ Error stack:', error.stack);
     res.status(500).json({
       success: false,
-      message: 'Failed to create lead'
+      message: 'Failed to create lead',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Database error'
     });
   }
 });
