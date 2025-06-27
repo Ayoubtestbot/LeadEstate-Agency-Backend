@@ -85,7 +85,13 @@ const initDatabase = async () => {
       )
     `);
 
-    console.log('✅ Database tables initialized successfully');
+    // Add missing columns if they don't exist
+    await pool.query(`
+      ALTER TABLE leads
+      ADD COLUMN IF NOT EXISTS assigned_to VARCHAR(255)
+    `);
+
+    console.log('✅ Database tables initialized and migrated successfully');
   } catch (error) {
     console.error('❌ Database initialization error:', error);
   }
@@ -254,6 +260,7 @@ app.get('/api/leads', async (req, res) => {
       budget: lead.budget,
       notes: lead.notes,
       status: lead.status,
+      assignedTo: lead.assigned_to,
       created_at: lead.created_at,
       updated_at: lead.updated_at
     }));
@@ -373,13 +380,14 @@ app.put('/api/leads/:id', async (req, res) => {
         budget = COALESCE($8, budget),
         notes = COALESCE($9, notes),
         status = COALESCE($10, status),
-        updated_at = $11
+        assigned_to = COALESCE($11, assigned_to),
+        updated_at = $12
       WHERE id = $1
       RETURNING *
     `, [
       id, firstName, lastName, updateData.email, updateData.phone,
       updateData.phone, updateData.source, updateData.budget ? parseFloat(updateData.budget) : null,
-      updateData.notes, updateData.status, new Date().toISOString()
+      updateData.notes, updateData.status, updateData.assignedTo, new Date().toISOString()
     ]);
 
     if (result.rows.length === 0) {
@@ -401,6 +409,7 @@ app.put('/api/leads/:id', async (req, res) => {
       budget: result.rows[0].budget,
       notes: result.rows[0].notes,
       status: result.rows[0].status,
+      assignedTo: result.rows[0].assigned_to,
       created_at: result.rows[0].created_at,
       updated_at: result.rows[0].updated_at
     };
