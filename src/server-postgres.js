@@ -91,10 +91,11 @@ const initDatabase = async () => {
       ADD COLUMN IF NOT EXISTS assigned_to VARCHAR(255)
     `);
 
-    // Ensure properties table exists with simplified schema
-    console.log('🔧 Ensuring properties table exists...');
+    // Drop and recreate properties table with correct schema
+    console.log('🔧 Recreating properties table with simplified schema...');
+    await pool.query(`DROP TABLE IF EXISTS properties`);
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS properties (
+      CREATE TABLE properties (
         id VARCHAR(255) PRIMARY KEY,
         title VARCHAR(255) NOT NULL,
         type VARCHAR(255),
