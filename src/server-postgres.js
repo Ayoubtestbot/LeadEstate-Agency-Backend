@@ -94,8 +94,15 @@ const initDatabase = async () => {
 // Initialize database on startup
 initDatabase();
 
-// Helper function to generate IDs
-const generateId = () => Date.now().toString() + Math.random().toString(36).substr(2, 9);
+// Helper function to generate UUIDs
+const generateId = () => {
+  // Generate a simple UUID v4 format
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c == 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
 
 // Status endpoint
 app.get('/api/status', (req, res) => {
@@ -158,7 +165,7 @@ app.get('/api/test-insert', async (req, res) => {
 
     // Test data
     const testLead = {
-      id: 'test-' + Date.now(),
+      id: generateId(),
       first_name: 'Test',
       last_name: 'User',
       email: 'test@example.com',
