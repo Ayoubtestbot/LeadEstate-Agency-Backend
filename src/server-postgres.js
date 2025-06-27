@@ -473,34 +473,57 @@ app.get('/api/properties', async (req, res) => {
 
 app.post('/api/properties', async (req, res) => {
   try {
+    console.log('📝 Creating property with data:', req.body);
+
     const propertyData = req.body;
     const newProperty = {
       id: generateId(),
-      ...propertyData,
+      title: propertyData.title,
+      type: propertyData.type,
+      price: propertyData.price ? parseFloat(propertyData.price) : null,
+      location: propertyData.location,
+      bedrooms: propertyData.bedrooms ? parseInt(propertyData.bedrooms) : null,
+      bathrooms: propertyData.bathrooms ? parseInt(propertyData.bathrooms) : null,
+      area: propertyData.area ? parseFloat(propertyData.area) : null,
+      description: propertyData.description,
+      status: propertyData.status || 'available',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
-    
-    await pool.query(`
+
+    console.log('💾 Saving property to database:', newProperty);
+
+    const result = await pool.query(`
       INSERT INTO properties (id, title, type, price, location, bedrooms, bathrooms, area, description, status, created_at, updated_at)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      RETURNING *
     `, [
       newProperty.id, newProperty.title, newProperty.type, newProperty.price,
       newProperty.location, newProperty.bedrooms, newProperty.bathrooms,
       newProperty.area, newProperty.description, newProperty.status,
       newProperty.created_at, newProperty.updated_at
     ]);
-    
+
+    console.log('✅ Property saved successfully:', result.rows[0]);
+
+    // Format response for frontend compatibility
+    const responseData = {
+      ...result.rows[0],
+      createdAt: result.rows[0].created_at,
+      updatedAt: result.rows[0].updated_at
+    };
+
     res.status(201).json({
       success: true,
-      data: newProperty,
+      data: responseData,
       message: 'Property created successfully'
     });
   } catch (error) {
-    console.error('Error creating property:', error);
+    console.error('❌ Error creating property:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to create property'
+      message: 'Failed to create property',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Database error'
     });
   }
 });
