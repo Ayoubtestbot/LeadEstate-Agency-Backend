@@ -348,34 +348,66 @@ app.post('/api/leads', async (req, res) => {
 
 app.put('/api/leads/:id', async (req, res) => {
   try {
+    console.log('📝 Updating lead:', req.params.id, 'with data:', req.body);
+
     const { id } = req.params;
     const updateData = req.body;
-    
-    await pool.query(`
-      UPDATE leads SET 
-        name = COALESCE($2, name),
-        email = COALESCE($3, email),
-        phone = COALESCE($4, phone),
-        city = COALESCE($5, city),
-        source = COALESCE($6, source),
-        property_type = COALESCE($7, property_type),
+
+    // Split name into first_name and last_name if provided
+    let firstName = null;
+    let lastName = null;
+    if (updateData.name) {
+      const nameParts = updateData.name.split(' ');
+      firstName = nameParts[0] || '';
+      lastName = nameParts.slice(1).join(' ') || '';
+    }
+
+    const result = await pool.query(`
+      UPDATE leads SET
+        first_name = COALESCE($2, first_name),
+        last_name = COALESCE($3, last_name),
+        email = COALESCE($4, email),
+        phone = COALESCE($5, phone),
+        whatsapp = COALESCE($6, whatsapp),
+        source = COALESCE($7, source),
         budget = COALESCE($8, budget),
         notes = COALESCE($9, notes),
         status = COALESCE($10, status),
-        assigned_to = COALESCE($11, assigned_to),
-        updated_at = $12
+        updated_at = $11
       WHERE id = $1
+      RETURNING *
     `, [
-      id, updateData.name, updateData.email, updateData.phone, updateData.city,
-      updateData.source, updateData.propertyType, updateData.budget, updateData.notes,
-      updateData.status, updateData.assignedTo, new Date().toISOString()
+      id, firstName, lastName, updateData.email, updateData.phone,
+      updateData.phone, updateData.source, updateData.budget ? parseFloat(updateData.budget) : null,
+      updateData.notes, updateData.status, new Date().toISOString()
     ]);
-    
-    const result = await pool.query('SELECT * FROM leads WHERE id = $1', [id]);
-    
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Lead not found'
+      });
+    }
+
+    console.log('✅ Lead updated successfully:', result.rows[0]);
+
+    // Format response for frontend compatibility
+    const updatedLead = {
+      id: result.rows[0].id,
+      name: `${result.rows[0].first_name || ''} ${result.rows[0].last_name || ''}`.trim(),
+      email: result.rows[0].email,
+      phone: result.rows[0].phone,
+      source: result.rows[0].source,
+      budget: result.rows[0].budget,
+      notes: result.rows[0].notes,
+      status: result.rows[0].status,
+      created_at: result.rows[0].created_at,
+      updated_at: result.rows[0].updated_at
+    };
+
     res.json({
       success: true,
-      data: result.rows[0],
+      data: updatedLead,
       message: 'Lead updated successfully'
     });
   } catch (error) {
@@ -457,6 +489,59 @@ app.post('/api/properties', async (req, res) => {
   }
 });
 
+app.put('/api/properties/:id', async (req, res) => {
+  try {
+    console.log('📝 Updating property:', req.params.id, 'with data:', req.body);
+
+    const { id } = req.params;
+    const updateData = req.body;
+
+    const result = await pool.query(`
+      UPDATE properties SET
+        title = COALESCE($2, title),
+        type = COALESCE($3, type),
+        price = COALESCE($4, price),
+        location = COALESCE($5, location),
+        bedrooms = COALESCE($6, bedrooms),
+        bathrooms = COALESCE($7, bathrooms),
+        area = COALESCE($8, area),
+        description = COALESCE($9, description),
+        status = COALESCE($10, status),
+        updated_at = $11
+      WHERE id = $1
+      RETURNING *
+    `, [
+      id, updateData.title, updateData.type, updateData.price ? parseFloat(updateData.price) : null,
+      updateData.location, updateData.bedrooms ? parseInt(updateData.bedrooms) : null,
+      updateData.bathrooms ? parseInt(updateData.bathrooms) : null,
+      updateData.area ? parseFloat(updateData.area) : null, updateData.description,
+      updateData.status, new Date().toISOString()
+    ]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Property not found'
+      });
+    }
+
+    console.log('✅ Property updated successfully:', result.rows[0]);
+
+    res.json({
+      success: true,
+      data: result.rows[0],
+      message: 'Property updated successfully'
+    });
+  } catch (error) {
+    console.error('❌ Error updating property:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update property',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Database error'
+    });
+  }
+});
+
 // Team endpoints
 app.get('/api/team', async (req, res) => {
   try {
@@ -506,6 +591,54 @@ app.post('/api/team', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to create team member'
+    });
+  }
+});
+
+app.put('/api/team/:id', async (req, res) => {
+  try {
+    console.log('📝 Updating team member:', req.params.id, 'with data:', req.body);
+
+    const { id } = req.params;
+    const updateData = req.body;
+
+    const result = await pool.query(`
+      UPDATE team_members SET
+        name = COALESCE($2, name),
+        email = COALESCE($3, email),
+        phone = COALESCE($4, phone),
+        role = COALESCE($5, role),
+        department = COALESCE($6, department),
+        status = COALESCE($7, status),
+        updated_at = $8
+      WHERE id = $1
+      RETURNING *
+    `, [
+      id, updateData.name, updateData.email, updateData.phone,
+      updateData.role, updateData.department, updateData.status,
+      new Date().toISOString()
+    ]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Team member not found'
+      });
+    }
+
+    console.log('✅ Team member updated successfully:', result.rows[0]);
+
+    res.json({
+      success: true,
+      data: result.rows[0],
+      message: 'Team member updated successfully'
+    });
+  } catch (error) {
+    console.error('❌ Error updating team member:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update team member',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Database error'
     });
   }
 });
