@@ -261,7 +261,9 @@ app.get('/api/leads', async (req, res) => {
       notes: lead.notes,
       status: lead.status,
       assignedTo: lead.assigned_to,
-      created_at: lead.created_at,
+      createdAt: lead.created_at,
+      updatedAt: lead.updated_at,
+      created_at: lead.created_at, // Keep both for compatibility
       updated_at: lead.updated_at
     }));
 
@@ -332,7 +334,10 @@ app.post('/api/leads', async (req, res) => {
       budget: result.rows[0].budget,
       notes: result.rows[0].notes,
       status: result.rows[0].status,
-      created_at: result.rows[0].created_at,
+      assignedTo: result.rows[0].assigned_to,
+      createdAt: result.rows[0].created_at,
+      updatedAt: result.rows[0].updated_at,
+      created_at: result.rows[0].created_at, // Keep both for compatibility
       updated_at: result.rows[0].updated_at
     };
 
@@ -410,7 +415,9 @@ app.put('/api/leads/:id', async (req, res) => {
       notes: result.rows[0].notes,
       status: result.rows[0].status,
       assignedTo: result.rows[0].assigned_to,
-      created_at: result.rows[0].created_at,
+      createdAt: result.rows[0].created_at,
+      updatedAt: result.rows[0].updated_at,
+      created_at: result.rows[0].created_at, // Keep both for compatibility
       updated_at: result.rows[0].updated_at
     };
 
@@ -555,10 +562,19 @@ app.put('/api/properties/:id', async (req, res) => {
 app.get('/api/team', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM team_members ORDER BY created_at DESC');
+
+    // Format data for frontend compatibility
+    const formattedTeamMembers = result.rows.map(member => ({
+      ...member,
+      createdAt: member.created_at,
+      updatedAt: member.updated_at,
+      joinedAt: member.joined_at
+    }));
+
     res.json({
       success: true,
-      data: result.rows,
-      count: result.rows.length
+      data: formattedTeamMembers,
+      count: formattedTeamMembers.length
     });
   } catch (error) {
     console.error('Error fetching team members:', error);
