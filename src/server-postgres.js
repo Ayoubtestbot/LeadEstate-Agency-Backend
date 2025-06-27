@@ -91,6 +91,23 @@ const initDatabase = async () => {
       ADD COLUMN IF NOT EXISTS assigned_to VARCHAR(255)
     `);
 
+    // Ensure properties table exists with simplified schema
+    console.log('🔧 Ensuring properties table exists...');
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS properties (
+        id VARCHAR(255) PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        type VARCHAR(255),
+        price DECIMAL,
+        address VARCHAR(255),
+        city VARCHAR(255),
+        surface DECIMAL,
+        description TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     console.log('✅ Database tables initialized and migrated successfully');
   } catch (error) {
     console.error('❌ Database initialization error:', error);
@@ -481,12 +498,10 @@ app.post('/api/properties', async (req, res) => {
       title: propertyData.title,
       type: propertyData.type,
       price: propertyData.price ? parseFloat(propertyData.price) : null,
-      location: propertyData.location,
-      bedrooms: propertyData.bedrooms ? parseInt(propertyData.bedrooms) : null,
-      bathrooms: propertyData.bathrooms ? parseInt(propertyData.bathrooms) : null,
-      area: propertyData.area ? parseFloat(propertyData.area) : null,
+      address: propertyData.address,
+      city: propertyData.city,
+      surface: propertyData.surface ? parseFloat(propertyData.surface) : null,
       description: propertyData.description,
-      status: propertyData.status || 'available',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
@@ -494,13 +509,12 @@ app.post('/api/properties', async (req, res) => {
     console.log('💾 Saving property to database:', newProperty);
 
     const result = await pool.query(`
-      INSERT INTO properties (id, title, type, price, location, bedrooms, bathrooms, area, description, status, created_at, updated_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      INSERT INTO properties (id, title, type, price, address, city, surface, description, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING *
     `, [
       newProperty.id, newProperty.title, newProperty.type, newProperty.price,
-      newProperty.location, newProperty.bedrooms, newProperty.bathrooms,
-      newProperty.area, newProperty.description, newProperty.status,
+      newProperty.address, newProperty.city, newProperty.surface, newProperty.description,
       newProperty.created_at, newProperty.updated_at
     ]);
 
@@ -540,21 +554,17 @@ app.put('/api/properties/:id', async (req, res) => {
         title = COALESCE($2, title),
         type = COALESCE($3, type),
         price = COALESCE($4, price),
-        location = COALESCE($5, location),
-        bedrooms = COALESCE($6, bedrooms),
-        bathrooms = COALESCE($7, bathrooms),
-        area = COALESCE($8, area),
-        description = COALESCE($9, description),
-        status = COALESCE($10, status),
-        updated_at = $11
+        address = COALESCE($5, address),
+        city = COALESCE($6, city),
+        surface = COALESCE($7, surface),
+        description = COALESCE($8, description),
+        updated_at = $9
       WHERE id = $1
       RETURNING *
     `, [
       id, updateData.title, updateData.type, updateData.price ? parseFloat(updateData.price) : null,
-      updateData.location, updateData.bedrooms ? parseInt(updateData.bedrooms) : null,
-      updateData.bathrooms ? parseInt(updateData.bathrooms) : null,
-      updateData.area ? parseFloat(updateData.area) : null, updateData.description,
-      updateData.status, new Date().toISOString()
+      updateData.address, updateData.city, updateData.surface ? parseFloat(updateData.surface) : null,
+      updateData.description, new Date().toISOString()
     ]);
 
     if (result.rows.length === 0) {
