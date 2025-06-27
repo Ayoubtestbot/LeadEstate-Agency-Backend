@@ -183,10 +183,27 @@ app.post('/api/auth/login', (req, res) => {
 app.get('/api/leads', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM leads ORDER BY created_at DESC');
+
+    // Format data for frontend compatibility
+    const formattedLeads = result.rows.map(lead => ({
+      id: lead.id,
+      name: `${lead.first_name || ''} ${lead.last_name || ''}`.trim(),
+      email: lead.email,
+      phone: lead.phone,
+      source: lead.source,
+      budget: lead.budget,
+      notes: lead.notes,
+      status: lead.status,
+      created_at: lead.created_at,
+      updated_at: lead.updated_at
+    }));
+
+    console.log(`📊 Fetched ${formattedLeads.length} leads from database`);
+
     res.json({
       success: true,
-      data: result.rows,
-      count: result.rows.length
+      data: formattedLeads,
+      count: formattedLeads.length
     });
   } catch (error) {
     console.error('Error fetching leads:', error);
@@ -202,18 +219,24 @@ app.post('/api/leads', async (req, res) => {
     console.log('📝 Received lead data:', req.body);
 
     const leadData = req.body;
+
+    // Split name into first_name and last_name
+    const nameParts = (leadData.name || '').split(' ');
+    const firstName = nameParts[0] || '';
+    const lastName = nameParts.slice(1).join(' ') || '';
+
     const newLead = {
       id: generateId(),
-      name: leadData.name || '',
+      first_name: firstName,
+      last_name: lastName,
       email: leadData.email || '',
       phone: leadData.phone || '',
-      city: leadData.city || '',
+      whatsapp: leadData.phone || '', // Use phone as whatsapp for now
       source: leadData.source || 'website',
-      propertyType: leadData.propertyType || 'house',
-      budget: leadData.budget || '',
+      budget: leadData.budget ? parseFloat(leadData.budget) : null,
       notes: leadData.notes || '',
       status: leadData.status || 'new',
-      assignedTo: leadData.assignedTo || null,
+      agency_id: 'default-agency', // Default agency ID
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
@@ -221,20 +244,34 @@ app.post('/api/leads', async (req, res) => {
     console.log('💾 Saving lead to database:', newLead);
 
     const result = await pool.query(`
-      INSERT INTO leads (id, name, email, phone, city, source, property_type, budget, notes, status, assigned_to, created_at, updated_at)
+      INSERT INTO leads (id, first_name, last_name, email, phone, whatsapp, source, budget, notes, status, agency_id, created_at, updated_at)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
       RETURNING *
     `, [
-      newLead.id, newLead.name, newLead.email, newLead.phone, newLead.city,
-      newLead.source, newLead.propertyType, newLead.budget, newLead.notes,
-      newLead.status, newLead.assignedTo, newLead.created_at, newLead.updated_at
+      newLead.id, newLead.first_name, newLead.last_name, newLead.email, newLead.phone,
+      newLead.whatsapp, newLead.source, newLead.budget, newLead.notes,
+      newLead.status, newLead.agency_id, newLead.created_at, newLead.updated_at
     ]);
 
     console.log('✅ Lead saved successfully:', result.rows[0]);
 
+    // Return data in format frontend expects
+    const responseData = {
+      id: result.rows[0].id,
+      name: `${result.rows[0].first_name} ${result.rows[0].last_name}`.trim(),
+      email: result.rows[0].email,
+      phone: result.rows[0].phone,
+      source: result.rows[0].source,
+      budget: result.rows[0].budget,
+      notes: result.rows[0].notes,
+      status: result.rows[0].status,
+      created_at: result.rows[0].created_at,
+      updated_at: result.rows[0].updated_at
+    };
+
     res.status(201).json({
       success: true,
-      data: newLead,
+      data: responseData,
       message: 'Lead created successfully'
     });
   } catch (error) {
