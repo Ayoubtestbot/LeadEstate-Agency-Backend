@@ -151,8 +151,8 @@ app.get('/api/test-db', async (req, res) => {
   }
 });
 
-// Test insert endpoint
-app.post('/api/test-insert', async (req, res) => {
+// Test insert endpoint (GET version for easy testing)
+app.get('/api/test-insert', async (req, res) => {
   try {
     console.log('🧪 Testing lead insert...');
 
