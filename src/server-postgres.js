@@ -568,7 +568,8 @@ app.get('/api/team', async (req, res) => {
       ...member,
       createdAt: member.created_at,
       updatedAt: member.updated_at,
-      joinedAt: member.joined_at
+      joinedAt: member.joined_at,
+      joinDate: member.joined_at // Frontend expects this field name
     }));
 
     res.json({
@@ -606,9 +607,17 @@ app.post('/api/team', async (req, res) => {
       newMember.joined_at, newMember.created_at, newMember.updated_at
     ]);
     
+    // Format response for frontend compatibility
+    const responseData = {
+      ...newMember,
+      joinDate: newMember.joined_at,
+      createdAt: newMember.created_at,
+      updatedAt: newMember.updated_at
+    };
+
     res.status(201).json({
       success: true,
-      data: newMember,
+      data: responseData,
       message: 'Team member added successfully'
     });
   } catch (error) {
@@ -653,9 +662,17 @@ app.put('/api/team/:id', async (req, res) => {
 
     console.log('✅ Team member updated successfully:', result.rows[0]);
 
+    // Format response for frontend compatibility
+    const responseData = {
+      ...result.rows[0],
+      joinDate: result.rows[0].joined_at,
+      createdAt: result.rows[0].created_at,
+      updatedAt: result.rows[0].updated_at
+    };
+
     res.json({
       success: true,
-      data: result.rows[0],
+      data: responseData,
       message: 'Team member updated successfully'
     });
   } catch (error) {
