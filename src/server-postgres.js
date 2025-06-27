@@ -108,6 +108,49 @@ app.get('/api/status', (req, res) => {
   });
 });
 
+// Database test endpoint
+app.get('/api/test-db', async (req, res) => {
+  try {
+    console.log('🧪 Testing database connection...');
+
+    // Test basic connection
+    const timeResult = await pool.query('SELECT NOW() as current_time');
+    console.log('✅ Database connection successful');
+
+    // Test if leads table exists
+    const tableCheck = await pool.query(`
+      SELECT table_name
+      FROM information_schema.tables
+      WHERE table_schema = 'public' AND table_name = 'leads'
+    `);
+    console.log('📋 Leads table check:', tableCheck.rows);
+
+    // Test table structure
+    const columnCheck = await pool.query(`
+      SELECT column_name, data_type
+      FROM information_schema.columns
+      WHERE table_name = 'leads'
+    `);
+    console.log('🏗️ Leads table structure:', columnCheck.rows);
+
+    res.json({
+      success: true,
+      message: 'Database test completed successfully',
+      database_time: timeResult.rows[0].current_time,
+      leads_table_exists: tableCheck.rows.length > 0,
+      table_columns: columnCheck.rows
+    });
+  } catch (error) {
+    console.error('❌ Database test failed:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Database test failed',
+      error: error.message,
+      stack: error.stack
+    });
+  }
+});
+
 // Auth endpoints
 app.post('/api/auth/login', (req, res) => {
   const { email, password } = req.body;
