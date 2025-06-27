@@ -151,6 +151,59 @@ app.get('/api/test-db', async (req, res) => {
   }
 });
 
+// Test insert endpoint
+app.post('/api/test-insert', async (req, res) => {
+  try {
+    console.log('🧪 Testing lead insert...');
+
+    // Test data
+    const testLead = {
+      id: 'test-' + Date.now(),
+      first_name: 'Test',
+      last_name: 'User',
+      email: 'test@example.com',
+      phone: '1234567890',
+      whatsapp: '1234567890',
+      source: 'website',
+      budget: 100000,
+      notes: 'Test notes',
+      status: 'new',
+      agency_id: 'test-agency',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    console.log('💾 Test lead data:', testLead);
+
+    const result = await pool.query(`
+      INSERT INTO leads (id, first_name, last_name, email, phone, whatsapp, source, budget, notes, status, agency_id, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      RETURNING *
+    `, [
+      testLead.id, testLead.first_name, testLead.last_name, testLead.email, testLead.phone,
+      testLead.whatsapp, testLead.source, testLead.budget, testLead.notes,
+      testLead.status, testLead.agency_id, testLead.created_at, testLead.updated_at
+    ]);
+
+    console.log('✅ Test insert successful:', result.rows[0]);
+
+    res.json({
+      success: true,
+      message: 'Test insert successful',
+      inserted_data: result.rows[0]
+    });
+  } catch (error) {
+    console.error('❌ Test insert failed:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Test insert failed',
+      error: error.message,
+      stack: error.stack,
+      detail: error.detail || 'No additional details'
+    });
+  }
+});
+
 // Auth endpoints
 app.post('/api/auth/login', (req, res) => {
   const { email, password } = req.body;
