@@ -11,10 +11,11 @@ const app = express();
 app.use(helmet());
 app.use(cors({
   origin: [
-    'http://localhost:5001', 
+    'http://localhost:5001',
     'http://localhost:3000',
     'https://lead-estate-agency-frontend.vercel.app',
-    'https://leadestate-agency-frontend.vercel.app'
+    'https://leadestate-agency-frontend.vercel.app',
+    'https://leadestate-backend-9fih.onrender.com'
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],

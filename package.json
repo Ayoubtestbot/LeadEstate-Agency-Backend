@@ -4,7 +4,8 @@
   "description": "LeadEstate Agency Backend API - Complete Real Estate CRM API",
   "main": "src/server.js",
   "scripts": {
-    "start": "node src/server-production.js",
+    "start": "node src/server-postgres.js",
+    "start-file": "node src/server-production.js",
     "dev": "node src/server-memory.js",
     "migrate": "node src/database/migrate.js",
     "seed": "node src/database/seed.js",
