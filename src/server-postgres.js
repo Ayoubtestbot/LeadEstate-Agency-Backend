@@ -168,6 +168,64 @@ const generateId = () => {
   });
 };
 
+// WhatsApp welcome message function
+async function sendWelcomeWhatsAppMessage(lead) {
+  try {
+    // Get agent information
+    const agentResult = await pool.query('SELECT * FROM team_members WHERE name = $1', [lead.assignedTo]);
+    const agent = agentResult.rows[0];
+
+    if (!agent) {
+      console.log('⚠️ Agent not found for WhatsApp message');
+      return;
+    }
+
+    // Format phone number (remove non-digits and ensure it starts with country code)
+    let phoneNumber = lead.phone.replace(/\D/g, '');
+    if (!phoneNumber.startsWith('33') && !phoneNumber.startsWith('+33')) {
+      // Assume French number if no country code
+      phoneNumber = '33' + phoneNumber.replace(/^0/, '');
+    }
+
+    // Create welcome message
+    const message = `🏠 *Bienvenue chez LeadEstate !*
+
+Bonjour ${lead.name} !
+
+Merci de votre intérêt pour nos services immobiliers. Je suis ${agent.name}, votre conseiller dédié.
+
+👤 *Votre conseiller :* ${agent.name}
+📱 *Mon numéro :* ${agent.phone || '+33 1 23 45 67 89'}
+📧 *Mon email :* ${agent.email || 'contact@leadestate.com'}
+
+Je suis là pour vous accompagner dans votre projet immobilier. N'hésitez pas à me contacter pour toute question !
+
+À très bientôt,
+${agent.name}
+*LeadEstate - Votre partenaire immobilier* 🏡`;
+
+    // Create WhatsApp URL
+    const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
+
+    console.log('📱 WhatsApp welcome message prepared for:', lead.name);
+    console.log('📞 Phone:', phoneNumber);
+    console.log('👤 Agent:', agent.name);
+    console.log('🔗 WhatsApp URL:', whatsappUrl);
+
+    return {
+      success: true,
+      message: 'WhatsApp welcome message prepared',
+      whatsappUrl: whatsappUrl,
+      agent: agent.name,
+      leadName: lead.name
+    };
+
+  } catch (error) {
+    console.error('❌ Error preparing WhatsApp message:', error);
+    throw error;
+  }
+}
+
 // Status endpoint
 app.get('/api/status', (req, res) => {
   res.json({
@@ -398,6 +456,15 @@ app.post('/api/leads', async (req, res) => {
       created_at: result.rows[0].created_at, // Keep both for compatibility
       updated_at: result.rows[0].updated_at
     };
+
+    // Send welcome WhatsApp message if phone number is provided and lead is assigned
+    if (result.rows[0].phone && result.rows[0].assigned_to) {
+      try {
+        await sendWelcomeWhatsAppMessage(responseData);
+      } catch (whatsappError) {
+        console.log('⚠️ WhatsApp message failed (non-critical):', whatsappError.message);
+      }
+    }
 
     res.status(201).json({
       success: true,
@@ -848,6 +915,60 @@ app.use((error, req, res, next) => {
     message: 'Internal server error',
     error: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'
   });
+});
+
+// WhatsApp notification endpoint
+app.post('/api/whatsapp/welcome/:leadId', async (req, res) => {
+  try {
+    const { leadId } = req.params;
+
+    // Get lead information
+    const leadResult = await pool.query('SELECT * FROM leads WHERE id = $1', [leadId]);
+    if (leadResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Lead not found'
+      });
+    }
+
+    const lead = leadResult.rows[0];
+    const leadData = {
+      id: lead.id,
+      name: `${lead.first_name} ${lead.last_name}`.trim(),
+      phone: lead.phone,
+      assignedTo: lead.assigned_to
+    };
+
+    if (!leadData.phone) {
+      return res.status(400).json({
+        success: false,
+        message: 'Lead has no phone number'
+      });
+    }
+
+    if (!leadData.assignedTo) {
+      return res.status(400).json({
+        success: false,
+        message: 'Lead is not assigned to any agent'
+      });
+    }
+
+    const result = await sendWelcomeWhatsAppMessage(leadData);
+
+    res.json({
+      success: true,
+      data: result,
+      message: 'WhatsApp welcome message prepared successfully'
+    });
+
+  } catch (error) {
+    console.error('❌ Error in WhatsApp welcome endpoint:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to prepare WhatsApp message',
+      error: error.message
+    });
+  }
 });
 
 const PORT = process.env.PORT || 5001;
