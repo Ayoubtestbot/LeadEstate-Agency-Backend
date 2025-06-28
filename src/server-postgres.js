@@ -1223,4 +1223,5 @@ app.listen(PORT, () => {
   console.log(`💾 Storage: PostgreSQL Database`);
   console.log(`🌐 CORS enabled for production domains`);
   console.log(`📡 API Status: http://localhost:${PORT}/api/status`);
+  console.log(`🔗 Property linking endpoints: ENABLED`);
 });
