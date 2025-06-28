@@ -830,19 +830,33 @@ app.delete('/api/leads/:leadId/unlink-property/:propertyId', async (req, res) =>
 // Analytics endpoints
 app.get('/api/analytics/leads-by-source', async (req, res) => {
   try {
+    console.log('📊 Fetching leads by source...');
+
     const result = await pool.query(`
-      SELECT source, COUNT(*) as count
+      SELECT
+        LOWER(TRIM(source)) as source,
+        COUNT(*) as count
       FROM leads
-      GROUP BY source
+      WHERE source IS NOT NULL AND source != ''
+      GROUP BY LOWER(TRIM(source))
       ORDER BY count DESC
     `);
 
+    // Format data with proper types and clean names
+    const formattedData = result.rows.map(row => ({
+      name: row.source.charAt(0).toUpperCase() + row.source.slice(1).replace('_', ' '),
+      source: row.source,
+      count: parseInt(row.count)
+    }));
+
+    console.log('✅ Leads by source data:', formattedData);
+
     res.json({
       success: true,
-      data: result.rows
+      data: formattedData
     });
   } catch (error) {
-    console.error('Error fetching leads by source:', error);
+    console.error('❌ Error fetching leads by source:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch leads by source analytics'
@@ -1010,6 +1024,187 @@ app.get('/api/analytics/avg-contact-time-by-agent', async (req, res) => {
       success: false,
       message: 'Failed to fetch average contact time analytics',
       error: error.message
+    });
+  }
+});
+
+// Additional Analytics Endpoints
+app.get('/api/analytics/leads-by-status', async (req, res) => {
+  try {
+    console.log('📊 Fetching leads by status...');
+
+    const result = await pool.query(`
+      SELECT
+        status,
+        COUNT(*) as count,
+        ROUND((COUNT(*) * 100.0 / (SELECT COUNT(*) FROM leads)), 2) as percentage
+      FROM leads
+      GROUP BY status
+      ORDER BY count DESC
+    `);
+
+    const formattedData = result.rows.map(row => ({
+      name: row.status.charAt(0).toUpperCase() + row.status.slice(1).replace('-', ' '),
+      status: row.status,
+      count: parseInt(row.count),
+      percentage: parseFloat(row.percentage)
+    }));
+
+    console.log('✅ Leads by status data:', formattedData);
+
+    res.json({
+      success: true,
+      data: formattedData
+    });
+  } catch (error) {
+    console.error('❌ Error fetching leads by status:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch leads by status analytics'
+    });
+  }
+});
+
+app.get('/api/analytics/leads-by-agent', async (req, res) => {
+  try {
+    console.log('📊 Fetching leads by agent...');
+
+    const result = await pool.query(`
+      SELECT
+        assigned_to as agent,
+        COUNT(*) as total_leads,
+        COUNT(CASE WHEN status = 'closed-won' THEN 1 END) as closed_won,
+        COUNT(CASE WHEN status = 'new' THEN 1 END) as new_leads,
+        COUNT(CASE WHEN status IN ('qualified', 'contacted') THEN 1 END) as active_leads
+      FROM leads
+      WHERE assigned_to IS NOT NULL AND assigned_to != ''
+      GROUP BY assigned_to
+      ORDER BY total_leads DESC
+    `);
+
+    const formattedData = result.rows.map(row => ({
+      agent: row.agent,
+      total_leads: parseInt(row.total_leads),
+      closed_won: parseInt(row.closed_won),
+      new_leads: parseInt(row.new_leads),
+      active_leads: parseInt(row.active_leads),
+      conversion_rate: row.total_leads > 0 ? ((row.closed_won / row.total_leads) * 100).toFixed(1) : '0.0'
+    }));
+
+    console.log('✅ Leads by agent data:', formattedData);
+
+    res.json({
+      success: true,
+      data: formattedData
+    });
+  } catch (error) {
+    console.error('❌ Error fetching leads by agent:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch leads by agent analytics'
+    });
+  }
+});
+
+app.get('/api/analytics/leads-timeline', async (req, res) => {
+  try {
+    console.log('📊 Fetching leads timeline...');
+
+    const { period = 'week' } = req.query;
+    let dateFormat, dateInterval;
+
+    switch (period) {
+      case 'day':
+        dateFormat = 'YYYY-MM-DD HH24:00';
+        dateInterval = '1 hour';
+        break;
+      case 'week':
+        dateFormat = 'YYYY-MM-DD';
+        dateInterval = '1 day';
+        break;
+      case 'month':
+        dateFormat = 'YYYY-MM-DD';
+        dateInterval = '1 day';
+        break;
+      default:
+        dateFormat = 'YYYY-MM-DD';
+        dateInterval = '1 day';
+    }
+
+    const result = await pool.query(`
+      SELECT
+        TO_CHAR(created_at, $1) as date,
+        COUNT(*) as count,
+        COUNT(CASE WHEN status = 'closed-won' THEN 1 END) as conversions
+      FROM leads
+      WHERE created_at >= NOW() - INTERVAL '1 ${period}'
+      GROUP BY TO_CHAR(created_at, $1)
+      ORDER BY date
+    `, [dateFormat]);
+
+    const formattedData = result.rows.map(row => ({
+      date: row.date,
+      leads: parseInt(row.count),
+      conversions: parseInt(row.conversions)
+    }));
+
+    console.log('✅ Leads timeline data:', formattedData);
+
+    res.json({
+      success: true,
+      data: formattedData,
+      period: period
+    });
+  } catch (error) {
+    console.error('❌ Error fetching leads timeline:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch leads timeline analytics'
+    });
+  }
+});
+
+app.get('/api/analytics/budget-analysis', async (req, res) => {
+  try {
+    console.log('📊 Fetching budget analysis...');
+
+    const result = await pool.query(`
+      SELECT
+        CASE
+          WHEN budget::numeric < 300000 THEN 'Under 300K'
+          WHEN budget::numeric < 500000 THEN '300K - 500K'
+          WHEN budget::numeric < 750000 THEN '500K - 750K'
+          WHEN budget::numeric < 1000000 THEN '750K - 1M'
+          ELSE 'Over 1M'
+        END as budget_range,
+        COUNT(*) as count,
+        AVG(budget::numeric) as avg_budget,
+        COUNT(CASE WHEN status = 'closed-won' THEN 1 END) as conversions
+      FROM leads
+      WHERE budget IS NOT NULL AND budget != '' AND budget ~ '^[0-9]+$'
+      GROUP BY budget_range
+      ORDER BY AVG(budget::numeric)
+    `);
+
+    const formattedData = result.rows.map(row => ({
+      range: row.budget_range,
+      count: parseInt(row.count),
+      avg_budget: Math.round(parseFloat(row.avg_budget)),
+      conversions: parseInt(row.conversions),
+      conversion_rate: row.count > 0 ? ((row.conversions / row.count) * 100).toFixed(1) : '0.0'
+    }));
+
+    console.log('✅ Budget analysis data:', formattedData);
+
+    res.json({
+      success: true,
+      data: formattedData
+    });
+  } catch (error) {
+    console.error('❌ Error fetching budget analysis:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch budget analysis'
     });
   }
 });
