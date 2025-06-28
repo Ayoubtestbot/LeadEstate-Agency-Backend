@@ -3,9 +3,38 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const { Pool } = require('pg');
+const multer = require('multer');
+const path = require('path');
 require('dotenv').config();
 
 const app = express();
+
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, 'uploads/') // Make sure this directory exists
+  },
+  filename: function (req, file, cb) {
+    // Generate unique filename
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
+    cb(null, 'property-' + uniqueSuffix + path.extname(file.originalname))
+  }
+});
+
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB limit
+  },
+  fileFilter: function (req, file, cb) {
+    // Check file type
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed!'), false);
+    }
+  }
+});
 
 // Basic middleware
 app.use(helmet());
@@ -25,6 +54,9 @@ app.use(cors({
 app.use(morgan('combined'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+// Serve uploaded images statically
+app.use('/uploads', express.static('uploads'));
 
 // PostgreSQL connection
 const pool = new Pool({
@@ -493,6 +525,36 @@ app.get('/api/properties', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch properties'
+    });
+  }
+});
+
+// POST /api/properties/upload - Upload property image
+app.post('/api/properties/upload', upload.single('image'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'No image file uploaded'
+      });
+    }
+
+    const imageUrl = `/uploads/${req.file.filename}`;
+
+    res.status(200).json({
+      success: true,
+      data: {
+        imageUrl: imageUrl,
+        filename: req.file.filename
+      },
+      message: 'Image uploaded successfully'
+    });
+  } catch (error) {
+    console.error('❌ Error uploading image:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to upload image',
+      error: error.message
     });
   }
 });
