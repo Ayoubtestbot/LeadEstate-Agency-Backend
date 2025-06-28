@@ -5,6 +5,7 @@ const morgan = require('morgan');
 const { Pool } = require('pg');
 const multer = require('multer');
 const path = require('path');
+const twilio = require('twilio');
 require('dotenv').config();
 
 const app = express();
@@ -63,6 +64,15 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
+
+// Twilio client initialization
+let twilioClient = null;
+if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
+  twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+  console.log('✅ Twilio client initialized');
+} else {
+  console.log('⚠️ Twilio credentials not found - WhatsApp messages will be logged only');
+}
 
 // Initialize database tables
 const initDatabase = async () => {
@@ -168,7 +178,7 @@ const generateId = () => {
   });
 };
 
-// WhatsApp welcome message function
+// WhatsApp welcome message function with Twilio
 async function sendWelcomeWhatsAppMessage(lead) {
   try {
     // Get agent information
@@ -177,14 +187,22 @@ async function sendWelcomeWhatsAppMessage(lead) {
 
     if (!agent) {
       console.log('⚠️ Agent not found for WhatsApp message');
-      return;
+      return { success: false, message: 'Agent not found' };
     }
 
-    // Format phone number (remove non-digits and ensure it starts with country code)
+    // Format phone number for WhatsApp (international format)
     let phoneNumber = lead.phone.replace(/\D/g, '');
-    if (!phoneNumber.startsWith('33') && !phoneNumber.startsWith('+33')) {
-      // Assume French number if no country code
-      phoneNumber = '33' + phoneNumber.replace(/^0/, '');
+
+    // Handle French phone numbers
+    if (phoneNumber.startsWith('0')) {
+      phoneNumber = '33' + phoneNumber.substring(1); // Remove leading 0 and add country code
+    } else if (!phoneNumber.startsWith('33') && !phoneNumber.startsWith('+33')) {
+      phoneNumber = '33' + phoneNumber; // Add French country code
+    }
+
+    // Ensure it starts with + for Twilio
+    if (!phoneNumber.startsWith('+')) {
+      phoneNumber = '+' + phoneNumber;
     }
 
     // Create welcome message
@@ -204,24 +222,68 @@ Je suis là pour vous accompagner dans votre projet immobilier. N'hésitez pas �
 ${agent.name}
 *LeadEstate - Votre partenaire immobilier* 🏡`;
 
-    // Create WhatsApp URL
-    const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
-
-    console.log('📱 WhatsApp welcome message prepared for:', lead.name);
+    console.log('📱 Preparing WhatsApp message for:', lead.name);
     console.log('📞 Phone:', phoneNumber);
     console.log('👤 Agent:', agent.name);
-    console.log('🔗 WhatsApp URL:', whatsappUrl);
 
-    return {
-      success: true,
-      message: 'WhatsApp welcome message prepared',
-      whatsappUrl: whatsappUrl,
-      agent: agent.name,
-      leadName: lead.name
-    };
+    // Try to send via Twilio if configured
+    if (twilioClient && process.env.TWILIO_WHATSAPP_FROM) {
+      try {
+        const twilioMessage = await twilioClient.messages.create({
+          from: `whatsapp:${process.env.TWILIO_WHATSAPP_FROM}`,
+          to: `whatsapp:${phoneNumber}`,
+          body: message
+        });
+
+        console.log('✅ WhatsApp message sent successfully via Twilio!');
+        console.log('📧 Message SID:', twilioMessage.sid);
+        console.log('📊 Status:', twilioMessage.status);
+
+        return {
+          success: true,
+          method: 'twilio',
+          messageSid: twilioMessage.sid,
+          status: twilioMessage.status,
+          agent: agent.name,
+          leadName: lead.name,
+          phoneNumber: phoneNumber
+        };
+
+      } catch (twilioError) {
+        console.error('❌ Twilio WhatsApp send failed:', twilioError.message);
+
+        // Fallback to URL method
+        const whatsappUrl = `https://wa.me/${phoneNumber.replace('+', '')}?text=${encodeURIComponent(message)}`;
+
+        return {
+          success: true,
+          method: 'fallback_url',
+          whatsappUrl: whatsappUrl,
+          agent: agent.name,
+          leadName: lead.name,
+          phoneNumber: phoneNumber,
+          error: twilioError.message
+        };
+      }
+    } else {
+      // No Twilio configured - provide URL for manual sending
+      const whatsappUrl = `https://wa.me/${phoneNumber.replace('+', '')}?text=${encodeURIComponent(message)}`;
+
+      console.log('📱 Twilio not configured - WhatsApp URL prepared');
+      console.log('🔗 WhatsApp URL:', whatsappUrl);
+
+      return {
+        success: true,
+        method: 'url_only',
+        whatsappUrl: whatsappUrl,
+        agent: agent.name,
+        leadName: lead.name,
+        phoneNumber: phoneNumber
+      };
+    }
 
   } catch (error) {
-    console.error('❌ Error preparing WhatsApp message:', error);
+    console.error('❌ Error in WhatsApp welcome message:', error);
     throw error;
   }
 }
@@ -458,19 +520,34 @@ app.post('/api/leads', async (req, res) => {
     };
 
     // Send welcome WhatsApp message if phone number is provided and lead is assigned
+    let whatsappResult = null;
     if (result.rows[0].phone && result.rows[0].assigned_to) {
       try {
-        await sendWelcomeWhatsAppMessage(responseData);
+        whatsappResult = await sendWelcomeWhatsAppMessage(responseData);
+        console.log('📱 WhatsApp welcome result:', whatsappResult);
       } catch (whatsappError) {
         console.log('⚠️ WhatsApp message failed (non-critical):', whatsappError.message);
+        whatsappResult = { success: false, error: whatsappError.message };
       }
     }
 
-    res.status(201).json({
+    // Include WhatsApp status in response
+    const response = {
       success: true,
       data: responseData,
       message: 'Lead created successfully'
-    });
+    };
+
+    if (whatsappResult) {
+      response.whatsapp = whatsappResult;
+      if (whatsappResult.success && whatsappResult.method === 'twilio') {
+        response.message += ' - WhatsApp welcome message sent automatically!';
+      } else if (whatsappResult.success && whatsappResult.method === 'url_only') {
+        response.message += ' - WhatsApp welcome message prepared (Twilio not configured)';
+      }
+    }
+
+    res.status(201).json(response);
   } catch (error) {
     console.error('❌ Error creating lead:', error);
     console.error('❌ Error details:', error.message);
