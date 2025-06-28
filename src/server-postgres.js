@@ -827,6 +827,179 @@ app.delete('/api/leads/:leadId/unlink-property/:propertyId', async (req, res) =>
   }
 });
 
+// Analytics endpoints
+app.get('/api/analytics/leads-by-source', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT source, COUNT(*) as count
+      FROM leads
+      GROUP BY source
+      ORDER BY count DESC
+    `);
+
+    res.json({
+      success: true,
+      data: result.rows
+    });
+  } catch (error) {
+    console.error('Error fetching leads by source:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch leads by source analytics'
+    });
+  }
+});
+
+app.get('/api/analytics/leads-not-contacted', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT COUNT(*) as count
+      FROM leads
+      WHERE status = 'new'
+    `);
+
+    const totalResult = await pool.query('SELECT COUNT(*) as total FROM leads');
+    const notContacted = parseInt(result.rows[0].count);
+    const total = parseInt(totalResult.rows[0].total);
+    const percentage = total > 0 ? ((notContacted / total) * 100).toFixed(1) : 0;
+
+    res.json({
+      success: true,
+      data: {
+        count: notContacted,
+        total: total,
+        percentage: parseFloat(percentage)
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching not contacted leads:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch not contacted leads analytics'
+    });
+  }
+});
+
+app.get('/api/analytics/contacted-leads', async (req, res) => {
+  try {
+    const { period = 'week' } = req.query;
+
+    let dateFilter = '';
+    switch (period) {
+      case 'day':
+        dateFilter = "AND created_at >= NOW() - INTERVAL '1 day'";
+        break;
+      case 'week':
+        dateFilter = "AND created_at >= NOW() - INTERVAL '1 week'";
+        break;
+      case 'month':
+        dateFilter = "AND created_at >= NOW() - INTERVAL '1 month'";
+        break;
+      default:
+        dateFilter = "AND created_at >= NOW() - INTERVAL '1 week'";
+    }
+
+    const contactedResult = await pool.query(`
+      SELECT COUNT(*) as count
+      FROM leads
+      WHERE status != 'new' ${dateFilter}
+    `);
+
+    const totalResult = await pool.query(`
+      SELECT COUNT(*) as total
+      FROM leads
+      WHERE 1=1 ${dateFilter}
+    `);
+
+    const contacted = parseInt(contactedResult.rows[0].count);
+    const total = parseInt(totalResult.rows[0].total);
+    const percentage = total > 0 ? ((contacted / total) * 100).toFixed(1) : 0;
+
+    res.json({
+      success: true,
+      data: {
+        contacted: contacted,
+        total: total,
+        percentage: parseFloat(percentage),
+        period: period
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching contacted leads:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch contacted leads analytics'
+    });
+  }
+});
+
+app.get('/api/analytics/conversion-rate-by-source', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        source,
+        COUNT(*) as total_leads,
+        COUNT(CASE WHEN status = 'closed-won' THEN 1 END) as converted_leads,
+        ROUND(
+          (COUNT(CASE WHEN status = 'closed-won' THEN 1 END)::float / COUNT(*)::float) * 100,
+          2
+        ) as conversion_rate
+      FROM leads
+      GROUP BY source
+      ORDER BY conversion_rate DESC
+    `);
+
+    res.json({
+      success: true,
+      data: result.rows
+    });
+  } catch (error) {
+    console.error('Error fetching conversion rate by source:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch conversion rate analytics'
+    });
+  }
+});
+
+app.get('/api/analytics/avg-contact-time-by-agent', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        assigned_to as agent,
+        COUNT(*) as total_leads,
+        AVG(
+          CASE
+            WHEN status != 'new' THEN
+              EXTRACT(EPOCH FROM (updated_at - created_at)) / 3600
+            ELSE NULL
+          END
+        ) as avg_hours_to_contact
+      FROM leads
+      WHERE assigned_to IS NOT NULL
+      GROUP BY assigned_to
+      ORDER BY avg_hours_to_contact ASC
+    `);
+
+    const formattedData = result.rows.map(row => ({
+      agent: row.agent,
+      total_leads: parseInt(row.total_leads),
+      avg_hours_to_contact: row.avg_hours_to_contact ? parseFloat(row.avg_hours_to_contact).toFixed(1) : null
+    }));
+
+    res.json({
+      success: true,
+      data: formattedData
+    });
+  } catch (error) {
+    console.error('Error fetching average contact time by agent:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch average contact time analytics'
+    });
+  }
+});
+
 // Properties endpoints
 app.get('/api/properties', async (req, res) => {
   try {
