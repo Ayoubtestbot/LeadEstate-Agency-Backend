@@ -708,7 +708,7 @@ app.delete('/api/leads/:id', async (req, res) => {
   try {
     const { id } = req.params;
     await pool.query('DELETE FROM leads WHERE id = $1', [id]);
-    
+
     res.json({
       success: true,
       message: 'Lead deleted successfully'
@@ -718,6 +718,111 @@ app.delete('/api/leads/:id', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to delete lead'
+    });
+  }
+});
+
+// Property linking endpoints
+app.post('/api/leads/:leadId/link-property/:propertyId', async (req, res) => {
+  try {
+    const { leadId, propertyId } = req.params;
+
+    console.log('🔗 Linking property:', leadId, 'to', propertyId);
+
+    // Get current lead
+    const leadResult = await pool.query('SELECT * FROM leads WHERE id = $1', [leadId]);
+    if (leadResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Lead not found'
+      });
+    }
+
+    const lead = leadResult.rows[0];
+    let interestedProperties = [];
+
+    try {
+      interestedProperties = JSON.parse(lead.interested_properties || '[]');
+    } catch (error) {
+      interestedProperties = [];
+    }
+
+    // Add property if not already linked
+    if (!interestedProperties.includes(propertyId)) {
+      interestedProperties.push(propertyId);
+    }
+
+    // Update lead with new interested properties
+    const result = await pool.query(
+      'UPDATE leads SET interested_properties = $1, updated_at = $2 WHERE id = $3 RETURNING *',
+      [JSON.stringify(interestedProperties), new Date().toISOString(), leadId]
+    );
+
+    console.log('✅ Property linked to lead successfully');
+
+    res.json({
+      success: true,
+      data: result.rows[0],
+      message: 'Property linked successfully'
+    });
+
+  } catch (error) {
+    console.error('❌ Error linking property to lead:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to link property to lead',
+      error: error.message
+    });
+  }
+});
+
+app.delete('/api/leads/:leadId/unlink-property/:propertyId', async (req, res) => {
+  try {
+    const { leadId, propertyId } = req.params;
+
+    console.log('🔗 Unlinking property:', propertyId, 'from', leadId);
+
+    // Get current lead
+    const leadResult = await pool.query('SELECT * FROM leads WHERE id = $1', [leadId]);
+    if (leadResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Lead not found'
+      });
+    }
+
+    const lead = leadResult.rows[0];
+    let interestedProperties = [];
+
+    try {
+      interestedProperties = JSON.parse(lead.interested_properties || '[]');
+    } catch (error) {
+      interestedProperties = [];
+    }
+
+    // Remove property from interested properties
+    interestedProperties = interestedProperties.filter(id => id !== propertyId);
+
+    // Update lead
+    const result = await pool.query(
+      'UPDATE leads SET interested_properties = $1, updated_at = $2 WHERE id = $3 RETURNING *',
+      [JSON.stringify(interestedProperties), new Date().toISOString(), leadId]
+    );
+
+    console.log('✅ Property unlinked from lead successfully');
+
+    res.json({
+      success: true,
+      data: result.rows[0],
+      message: 'Property unlinked successfully'
+    });
+
+  } catch (error) {
+    console.error('❌ Error unlinking property from lead:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to unlink property from lead',
+      error: error.message
     });
   }
 });
@@ -1110,107 +1215,6 @@ app.post('/api/whatsapp/welcome/:leadId', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to prepare WhatsApp message',
-      error: error.message
-    });
-  }
-});
-
-// Property linking endpoints
-app.post('/api/leads/:leadId/link-property/:propertyId', async (req, res) => {
-  try {
-    const { leadId, propertyId } = req.params;
-
-    // Get current lead
-    const leadResult = await pool.query('SELECT * FROM leads WHERE id = $1', [leadId]);
-    if (leadResult.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Lead not found'
-      });
-    }
-
-    const lead = leadResult.rows[0];
-    let interestedProperties = [];
-
-    try {
-      interestedProperties = JSON.parse(lead.interested_properties || '[]');
-    } catch (error) {
-      interestedProperties = [];
-    }
-
-    // Add property if not already linked
-    if (!interestedProperties.includes(propertyId)) {
-      interestedProperties.push(propertyId);
-    }
-
-    // Update lead with new interested properties
-    const result = await pool.query(
-      'UPDATE leads SET interested_properties = $1, updated_at = $2 WHERE id = $3 RETURNING *',
-      [JSON.stringify(interestedProperties), new Date().toISOString(), leadId]
-    );
-
-    console.log('✅ Property linked to lead successfully');
-
-    res.json({
-      success: true,
-      data: result.rows[0],
-      message: 'Property linked successfully'
-    });
-
-  } catch (error) {
-    console.error('❌ Error linking property to lead:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to link property to lead',
-      error: error.message
-    });
-  }
-});
-
-app.delete('/api/leads/:leadId/unlink-property/:propertyId', async (req, res) => {
-  try {
-    const { leadId, propertyId } = req.params;
-
-    // Get current lead
-    const leadResult = await pool.query('SELECT * FROM leads WHERE id = $1', [leadId]);
-    if (leadResult.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Lead not found'
-      });
-    }
-
-    const lead = leadResult.rows[0];
-    let interestedProperties = [];
-
-    try {
-      interestedProperties = JSON.parse(lead.interested_properties || '[]');
-    } catch (error) {
-      interestedProperties = [];
-    }
-
-    // Remove property from interested properties
-    interestedProperties = interestedProperties.filter(id => id !== propertyId);
-
-    // Update lead
-    const result = await pool.query(
-      'UPDATE leads SET interested_properties = $1, updated_at = $2 WHERE id = $3 RETURNING *',
-      [JSON.stringify(interestedProperties), new Date().toISOString(), leadId]
-    );
-
-    console.log('✅ Property unlinked from lead successfully');
-
-    res.json({
-      success: true,
-      data: result.rows[0],
-      message: 'Property unlinked successfully'
-    });
-
-  } catch (error) {
-    console.error('❌ Error unlinking property from lead:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to unlink property from lead',
       error: error.message
     });
   }
