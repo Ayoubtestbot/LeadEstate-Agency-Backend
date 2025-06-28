@@ -140,6 +140,11 @@ const initDatabase = async () => {
       ADD COLUMN IF NOT EXISTS language VARCHAR(10) DEFAULT 'fr'
     `);
 
+    await pool.query(`
+      ALTER TABLE leads
+      ADD COLUMN IF NOT EXISTS interested_properties TEXT DEFAULT '[]'
+    `);
+
     // Add missing columns to properties table (SAFE - preserves data)
     console.log('🔧 Updating properties table schema safely...');
     try {
@@ -477,21 +482,31 @@ app.get('/api/leads', async (req, res) => {
     const result = await pool.query('SELECT * FROM leads ORDER BY created_at DESC');
 
     // Format data for frontend compatibility
-    const formattedLeads = result.rows.map(lead => ({
-      id: lead.id,
-      name: `${lead.first_name || ''} ${lead.last_name || ''}`.trim(),
-      email: lead.email,
-      phone: lead.phone,
-      source: lead.source,
-      budget: lead.budget,
-      notes: lead.notes,
-      status: lead.status,
-      assignedTo: lead.assigned_to,
-      createdAt: lead.created_at,
-      updatedAt: lead.updated_at,
-      created_at: lead.created_at, // Keep both for compatibility
-      updated_at: lead.updated_at
-    }));
+    const formattedLeads = result.rows.map(lead => {
+      let interestedProperties = [];
+      try {
+        interestedProperties = JSON.parse(lead.interested_properties || '[]');
+      } catch (error) {
+        interestedProperties = [];
+      }
+
+      return {
+        id: lead.id,
+        name: `${lead.first_name || ''} ${lead.last_name || ''}`.trim(),
+        email: lead.email,
+        phone: lead.phone,
+        source: lead.source,
+        budget: lead.budget,
+        notes: lead.notes,
+        status: lead.status,
+        assignedTo: lead.assigned_to,
+        interestedProperties: interestedProperties, // Include interested properties
+        createdAt: lead.created_at,
+        updatedAt: lead.updated_at,
+        created_at: lead.created_at, // Keep both for compatibility
+        updated_at: lead.updated_at
+      };
+    });
 
     console.log(`📊 Fetched ${formattedLeads.length} leads from database`);
 
@@ -1095,6 +1110,107 @@ app.post('/api/whatsapp/welcome/:leadId', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to prepare WhatsApp message',
+      error: error.message
+    });
+  }
+});
+
+// Property linking endpoints
+app.post('/api/leads/:leadId/link-property/:propertyId', async (req, res) => {
+  try {
+    const { leadId, propertyId } = req.params;
+
+    // Get current lead
+    const leadResult = await pool.query('SELECT * FROM leads WHERE id = $1', [leadId]);
+    if (leadResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Lead not found'
+      });
+    }
+
+    const lead = leadResult.rows[0];
+    let interestedProperties = [];
+
+    try {
+      interestedProperties = JSON.parse(lead.interested_properties || '[]');
+    } catch (error) {
+      interestedProperties = [];
+    }
+
+    // Add property if not already linked
+    if (!interestedProperties.includes(propertyId)) {
+      interestedProperties.push(propertyId);
+    }
+
+    // Update lead with new interested properties
+    const result = await pool.query(
+      'UPDATE leads SET interested_properties = $1, updated_at = $2 WHERE id = $3 RETURNING *',
+      [JSON.stringify(interestedProperties), new Date().toISOString(), leadId]
+    );
+
+    console.log('✅ Property linked to lead successfully');
+
+    res.json({
+      success: true,
+      data: result.rows[0],
+      message: 'Property linked successfully'
+    });
+
+  } catch (error) {
+    console.error('❌ Error linking property to lead:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to link property to lead',
+      error: error.message
+    });
+  }
+});
+
+app.delete('/api/leads/:leadId/unlink-property/:propertyId', async (req, res) => {
+  try {
+    const { leadId, propertyId } = req.params;
+
+    // Get current lead
+    const leadResult = await pool.query('SELECT * FROM leads WHERE id = $1', [leadId]);
+    if (leadResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Lead not found'
+      });
+    }
+
+    const lead = leadResult.rows[0];
+    let interestedProperties = [];
+
+    try {
+      interestedProperties = JSON.parse(lead.interested_properties || '[]');
+    } catch (error) {
+      interestedProperties = [];
+    }
+
+    // Remove property from interested properties
+    interestedProperties = interestedProperties.filter(id => id !== propertyId);
+
+    // Update lead
+    const result = await pool.query(
+      'UPDATE leads SET interested_properties = $1, updated_at = $2 WHERE id = $3 RETURNING *',
+      [JSON.stringify(interestedProperties), new Date().toISOString(), leadId]
+    );
+
+    console.log('✅ Property unlinked from lead successfully');
+
+    res.json({
+      success: true,
+      data: result.rows[0],
+      message: 'Property unlinked successfully'
+    });
+
+  } catch (error) {
+    console.error('❌ Error unlinking property from lead:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to unlink property from lead',
       error: error.message
     });
   }
