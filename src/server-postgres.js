@@ -194,11 +194,19 @@ async function sendWelcomeWhatsAppMessage(lead) {
     // Format phone number for WhatsApp (international format)
     let phoneNumber = lead.phone.replace(/\D/g, '');
 
-    // Handle French phone numbers
+    // Handle different country codes properly
     if (phoneNumber.startsWith('0')) {
-      phoneNumber = '33' + phoneNumber.substring(1); // Remove leading 0 and add country code
-    } else if (!phoneNumber.startsWith('33') && !phoneNumber.startsWith('+33')) {
-      phoneNumber = '33' + phoneNumber; // Add French country code
+      // French number starting with 0 - add French country code
+      phoneNumber = '33' + phoneNumber.substring(1);
+    } else if (phoneNumber.startsWith('212')) {
+      // Morocco number - keep as is
+      phoneNumber = phoneNumber;
+    } else if (phoneNumber.startsWith('33')) {
+      // French number with country code - keep as is
+      phoneNumber = phoneNumber;
+    } else if (!phoneNumber.startsWith('33') && !phoneNumber.startsWith('212') && phoneNumber.length === 10) {
+      // Assume French number if 10 digits and no country code
+      phoneNumber = '33' + phoneNumber;
     }
 
     // Ensure it starts with + for Twilio
