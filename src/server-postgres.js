@@ -80,16 +80,17 @@ const initDatabase = async () => {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS leads (
         id VARCHAR(255) PRIMARY KEY,
-        name VARCHAR(255) NOT NULL,
+        first_name VARCHAR(255),
+        last_name VARCHAR(255),
         email VARCHAR(255),
         phone VARCHAR(255),
-        city VARCHAR(255),
+        whatsapp VARCHAR(255),
         source VARCHAR(255),
-        property_type VARCHAR(255),
-        budget VARCHAR(255),
+        budget DECIMAL,
         notes TEXT,
         status VARCHAR(255) DEFAULT 'new',
         assigned_to VARCHAR(255),
+        agency_id VARCHAR(255) DEFAULT 'default-agency',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
@@ -466,6 +467,7 @@ app.post('/api/leads', async (req, res) => {
     console.log('📝 Received lead data:', req.body);
 
     const leadData = req.body;
+    console.log('👤 Assigned to field:', leadData.assignedTo);
 
     // Split name into first_name and last_name
     const nameParts = (leadData.name || '').split(' ');
@@ -483,6 +485,7 @@ app.post('/api/leads', async (req, res) => {
       budget: leadData.budget ? parseFloat(leadData.budget) : null,
       notes: leadData.notes || '',
       status: leadData.status || 'new',
+      assigned_to: leadData.assignedTo || null, // Include assigned agent
       agency_id: 'default-agency', // Default agency ID
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
@@ -491,13 +494,13 @@ app.post('/api/leads', async (req, res) => {
     console.log('💾 Saving lead to database:', newLead);
 
     const result = await pool.query(`
-      INSERT INTO leads (id, first_name, last_name, email, phone, whatsapp, source, budget, notes, status, agency_id, created_at, updated_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      INSERT INTO leads (id, first_name, last_name, email, phone, whatsapp, source, budget, notes, status, assigned_to, agency_id, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       RETURNING *
     `, [
       newLead.id, newLead.first_name, newLead.last_name, newLead.email, newLead.phone,
       newLead.whatsapp, newLead.source, newLead.budget, newLead.notes,
-      newLead.status, newLead.agency_id, newLead.created_at, newLead.updated_at
+      newLead.status, newLead.assigned_to, newLead.agency_id, newLead.created_at, newLead.updated_at
     ]);
 
     console.log('✅ Lead saved successfully:', result.rows[0]);
