@@ -935,56 +935,68 @@ app.get('/api/analytics/contacted-leads', async (req, res) => {
 
 app.get('/api/analytics/conversion-rate-by-source', async (req, res) => {
   try {
+    console.log('📊 Fetching conversion rate by source...');
+
     const result = await pool.query(`
       SELECT
         source,
         COUNT(*) as total_leads,
         COUNT(CASE WHEN status = 'closed-won' THEN 1 END) as converted_leads,
-        ROUND(
-          (COUNT(CASE WHEN status = 'closed-won' THEN 1 END)::float / COUNT(*)::float) * 100,
-          2
-        ) as conversion_rate
+        CASE
+          WHEN COUNT(*) > 0 THEN
+            ROUND((COUNT(CASE WHEN status = 'closed-won' THEN 1 END)::numeric / COUNT(*)::numeric) * 100, 2)
+          ELSE 0
+        END as conversion_rate
       FROM leads
       GROUP BY source
       ORDER BY conversion_rate DESC
     `);
+
+    console.log('✅ Conversion rate data:', result.rows);
 
     res.json({
       success: true,
       data: result.rows
     });
   } catch (error) {
-    console.error('Error fetching conversion rate by source:', error);
+    console.error('❌ Error fetching conversion rate by source:', error);
+    console.error('Error details:', error.message);
+    console.error('Error stack:', error.stack);
     res.status(500).json({
       success: false,
-      message: 'Failed to fetch conversion rate analytics'
+      message: 'Failed to fetch conversion rate analytics',
+      error: error.message
     });
   }
 });
 
 app.get('/api/analytics/avg-contact-time-by-agent', async (req, res) => {
   try {
+    console.log('📊 Fetching average contact time by agent...');
+
     const result = await pool.query(`
       SELECT
         assigned_to as agent,
         COUNT(*) as total_leads,
         AVG(
           CASE
-            WHEN status != 'new' THEN
+            WHEN status != 'new' AND updated_at > created_at THEN
               EXTRACT(EPOCH FROM (updated_at - created_at)) / 3600
             ELSE NULL
           END
         ) as avg_hours_to_contact
       FROM leads
-      WHERE assigned_to IS NOT NULL
+      WHERE assigned_to IS NOT NULL AND assigned_to != ''
       GROUP BY assigned_to
-      ORDER BY avg_hours_to_contact ASC
+      ORDER BY avg_hours_to_contact ASC NULLS LAST
     `);
+
+    console.log('✅ Agent contact time data:', result.rows);
 
     const formattedData = result.rows.map(row => ({
       agent: row.agent,
       total_leads: parseInt(row.total_leads),
-      avg_hours_to_contact: row.avg_hours_to_contact ? parseFloat(row.avg_hours_to_contact).toFixed(1) : null
+      avg_hours_to_contact: row.avg_hours_to_contact ? parseFloat(row.avg_hours_to_contact).toFixed(1) : '0.0'
     }));
 
     res.json({
@@ -992,10 +1004,12 @@ app.get('/api/analytics/avg-contact-time-by-agent', async (req, res) => {
       data: formattedData
     });
   } catch (error) {
-    console.error('Error fetching average contact time by agent:', error);
+    console.error('❌ Error fetching average contact time by agent:', error);
+    console.error('Error details:', error.message);
     res.status(500).json({
       success: false,
-      message: 'Failed to fetch average contact time analytics'
+      message: 'Failed to fetch average contact time analytics',
+      error: error.message
     });
   }
 });
