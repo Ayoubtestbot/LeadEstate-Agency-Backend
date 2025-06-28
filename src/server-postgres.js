@@ -90,6 +90,7 @@ const initDatabase = async () => {
         notes TEXT,
         status VARCHAR(255) DEFAULT 'new',
         assigned_to VARCHAR(255),
+        language VARCHAR(10) DEFAULT 'fr',
         agency_id VARCHAR(255) DEFAULT 'default-agency',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -134,31 +135,43 @@ const initDatabase = async () => {
       ADD COLUMN IF NOT EXISTS assigned_to VARCHAR(255)
     `);
 
-    // Force recreate properties table with correct schema
-    console.log('🔧 Force recreating properties table...');
-    try {
-      await pool.query(`DROP TABLE IF EXISTS properties CASCADE`);
-      console.log('✅ Dropped old properties table');
-    } catch (error) {
-      console.log('⚠️ No existing properties table to drop');
-    }
-
     await pool.query(`
-      CREATE TABLE properties (
-        id VARCHAR(255) PRIMARY KEY,
-        title VARCHAR(255) NOT NULL,
-        type VARCHAR(255) DEFAULT 'apartment',
-        price DECIMAL DEFAULT 0,
-        address VARCHAR(255) DEFAULT '',
-        city VARCHAR(255) DEFAULT '',
-        surface DECIMAL DEFAULT 0,
-        description TEXT DEFAULT '',
-        image_url VARCHAR(500) DEFAULT '',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
+      ALTER TABLE leads
+      ADD COLUMN IF NOT EXISTS language VARCHAR(10) DEFAULT 'fr'
     `);
-    console.log('✅ Created new properties table with correct schema');
+
+    // Add missing columns to properties table (SAFE - preserves data)
+    console.log('🔧 Updating properties table schema safely...');
+    try {
+      await pool.query(`
+        ALTER TABLE properties
+        ADD COLUMN IF NOT EXISTS address VARCHAR(255) DEFAULT ''
+      `);
+
+      await pool.query(`
+        ALTER TABLE properties
+        ADD COLUMN IF NOT EXISTS city VARCHAR(255) DEFAULT ''
+      `);
+
+      await pool.query(`
+        ALTER TABLE properties
+        ADD COLUMN IF NOT EXISTS surface DECIMAL DEFAULT 0
+      `);
+
+      await pool.query(`
+        ALTER TABLE properties
+        ADD COLUMN IF NOT EXISTS description TEXT DEFAULT ''
+      `);
+
+      await pool.query(`
+        ALTER TABLE properties
+        ADD COLUMN IF NOT EXISTS image_url VARCHAR(500) DEFAULT ''
+      `);
+
+      console.log('✅ Properties table schema updated safely (data preserved)');
+    } catch (error) {
+      console.log('⚠️ Properties table schema update failed:', error.message);
+    }
 
     console.log('✅ Database tables initialized and migrated successfully');
   } catch (error) {
@@ -191,6 +204,10 @@ async function sendWelcomeWhatsAppMessage(lead) {
       return { success: false, message: 'Agent not found' };
     }
 
+    // Determine language (default to French if not specified)
+    const userLanguage = lead.language || 'fr';
+    console.log('🌐 WhatsApp message language:', userLanguage);
+
     // Format phone number for WhatsApp (international format)
     let phoneNumber = lead.phone.replace(/\D/g, '');
 
@@ -214,8 +231,29 @@ async function sendWelcomeWhatsAppMessage(lead) {
       phoneNumber = '+' + phoneNumber;
     }
 
-    // Create welcome message
-    const message = `🏠 *Bienvenue chez LeadEstate !*
+    // Create welcome message based on language
+    let message;
+
+    if (userLanguage === 'en') {
+      // English message
+      message = `🏠 *Welcome to LeadEstate!*
+
+Hello ${lead.name}!
+
+Thank you for your interest in our real estate services. I'm ${agent.name}, your dedicated advisor.
+
+👤 *Your advisor:* ${agent.name}
+📱 *My number:* ${agent.phone || '+33 1 23 45 67 89'}
+📧 *My email:* ${agent.email || 'contact@leadestate.com'}
+
+I'm here to help you with your real estate project. Don't hesitate to contact me for any questions!
+
+Best regards,
+${agent.name}
+*LeadEstate - Your Real Estate Partner* 🏡`;
+    } else {
+      // French message (default)
+      message = `🏠 *Bienvenue chez LeadEstate !*
 
 Bonjour ${lead.name} !
 
@@ -230,6 +268,7 @@ Je suis là pour vous accompagner dans votre projet immobilier. N'hésitez pas �
 À très bientôt,
 ${agent.name}
 *LeadEstate - Votre partenaire immobilier* 🏡`;
+    }
 
     console.log('📱 Preparing WhatsApp message for:', lead.name);
     console.log('📞 Phone:', phoneNumber);
@@ -494,6 +533,7 @@ app.post('/api/leads', async (req, res) => {
       notes: leadData.notes || '',
       status: leadData.status || 'new',
       assigned_to: leadData.assignedTo || null, // Include assigned agent
+      language: leadData.language || 'fr', // Include language preference
       agency_id: 'default-agency', // Default agency ID
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
@@ -502,13 +542,13 @@ app.post('/api/leads', async (req, res) => {
     console.log('💾 Saving lead to database:', newLead);
 
     const result = await pool.query(`
-      INSERT INTO leads (id, first_name, last_name, email, phone, whatsapp, source, budget, notes, status, assigned_to, agency_id, created_at, updated_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      INSERT INTO leads (id, first_name, last_name, email, phone, whatsapp, source, budget, notes, status, assigned_to, language, agency_id, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
       RETURNING *
     `, [
       newLead.id, newLead.first_name, newLead.last_name, newLead.email, newLead.phone,
       newLead.whatsapp, newLead.source, newLead.budget, newLead.notes,
-      newLead.status, newLead.assigned_to, newLead.agency_id, newLead.created_at, newLead.updated_at
+      newLead.status, newLead.assigned_to, newLead.language, newLead.agency_id, newLead.created_at, newLead.updated_at
     ]);
 
     console.log('✅ Lead saved successfully:', result.rows[0]);
@@ -524,6 +564,7 @@ app.post('/api/leads', async (req, res) => {
       notes: result.rows[0].notes,
       status: result.rows[0].status,
       assignedTo: result.rows[0].assigned_to,
+      language: result.rows[0].language, // Include language in response
       createdAt: result.rows[0].created_at,
       updatedAt: result.rows[0].updated_at,
       created_at: result.rows[0].created_at, // Keep both for compatibility
