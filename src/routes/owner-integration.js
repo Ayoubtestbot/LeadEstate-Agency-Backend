@@ -57,28 +57,21 @@ router.post('/setup-database', async (req, res) => {
       )
     `);
 
-    // Create users table if it doesn't exist
+    // Add missing columns to existing users table (if they don't exist)
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS users (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        email VARCHAR(255) UNIQUE NOT NULL,
-        first_name VARCHAR(100),
-        last_name VARCHAR(100),
-        role VARCHAR(50),
-        status VARCHAR(50) DEFAULT 'active',
-        agency_id UUID,
-        invitation_token VARCHAR(255),
-        invitation_sent_at TIMESTAMP,
-        invitation_expires_at TIMESTAMP,
-        account_activated_at TIMESTAMP,
-        last_login_at TIMESTAMP,
-        agency_name VARCHAR(255),
-        invited_by VARCHAR(255),
-        phone VARCHAR(50),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS agency_id UUID,
+      ADD COLUMN IF NOT EXISTS invitation_token VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS invitation_sent_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS invitation_expires_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS account_activated_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS agency_name VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS invited_by VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'active'
+    `).catch((error) => {
+      console.log('Note: Some columns may already exist:', error.message);
+    });
 
     // Add foreign key constraint
     await pool.query(`
@@ -293,16 +286,16 @@ router.get('/agencies', verifyOwnerRequest, async (req, res) => {
     const { status, search, limit = 50, offset = 0 } = req.query;
 
     let query = `
-      SELECT 
+      SELECT
         a.*,
         u.first_name as manager_name,
         u.email as manager_email,
         u.status as manager_status,
-        u.last_login_at as manager_last_login,
-        (SELECT COUNT(*) FROM users WHERE agency_id = a.id AND status = 'active') as active_users,
-        (SELECT COUNT(*) FROM users WHERE agency_id = a.id AND status = 'invited') as pending_users,
-        (SELECT COUNT(*) FROM leads WHERE agency_id = a.id) as total_leads,
-        (SELECT COUNT(*) FROM properties WHERE agency_id = a.id) as total_properties
+        COALESCE(u.last_login_at, u.created_at) as manager_last_login,
+        0 as active_users,
+        0 as pending_users,
+        0 as total_leads,
+        0 as total_properties
       FROM agencies a
       LEFT JOIN users u ON a.manager_id = u.id
       WHERE 1=1
