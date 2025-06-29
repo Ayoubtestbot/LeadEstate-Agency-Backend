@@ -41,15 +41,32 @@ const upload = multer({
 app.use(helmet());
 app.use(cors({
   origin: [
+    // Local development
     'http://localhost:5001',
     'http://localhost:3000',
+    'http://localhost:5000',
+    'http://localhost:4173',
+    // Agency CRM domains
     'https://lead-estate-agency-frontend.vercel.app',
     'https://leadestate-agency-frontend.vercel.app',
-    'https://leadestate-backend-9fih.onrender.com'
+    // Owner Dashboard domains (add your actual Vercel domain here)
+    'https://leadestate-owner-dashboard.vercel.app',
+    'https://admin.leadestate.com',
+    // Backend domain (for testing)
+    'https://leadestate-backend-9fih.onrender.com',
+    // Allow any Vercel domain for testing
+    /.*\.vercel\.app$/
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Requested-With',
+    'Accept',
+    'Origin',
+    'x-owner-api-key'  // Add Owner Dashboard API key header
+  ]
 }));
 
 app.use(morgan('combined'));
