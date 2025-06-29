@@ -1546,8 +1546,21 @@ app.use('/api/admin', adminRoutes);
 const userManagementRoutes = require('./routes/user-management');
 app.use('/api/user-management', userManagementRoutes);
 
-// Initialize reminder service
+// Agency management routes
+const agencyManagementRoutes = require('./routes/agency-management');
+app.use('/api/agency-management', agencyManagementRoutes);
+
+// Audit routes
+const auditRoutes = require('./routes/audit');
+app.use('/api/audit', auditRoutes);
+
+// Advanced analytics routes
+const advancedAnalyticsRoutes = require('./routes/advanced-analytics');
+app.use('/api/advanced-analytics', advancedAnalyticsRoutes);
+
+// Initialize services
 const reminderService = require('./services/reminderService');
+const auditService = require('./services/auditService');
 reminderService.startReminderScheduler();
 
 // Error handling
