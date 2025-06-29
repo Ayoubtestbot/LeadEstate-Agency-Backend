@@ -1538,6 +1538,18 @@ app.use('/api/invitations', invitationRoutes);
 const accountSetupRoutes = require('./routes/account-setup');
 app.use('/api/account-setup', accountSetupRoutes);
 
+// Admin routes
+const adminRoutes = require('./routes/admin');
+app.use('/api/admin', adminRoutes);
+
+// User management routes
+const userManagementRoutes = require('./routes/user-management');
+app.use('/api/user-management', userManagementRoutes);
+
+// Initialize reminder service
+const reminderService = require('./services/reminderService');
+reminderService.startReminderScheduler();
+
 // Error handling
 app.use((req, res) => {
   res.status(404).json({
