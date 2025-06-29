@@ -30,6 +30,84 @@ router.get('/test', (req, res) => {
   });
 });
 
+// Database setup route (no authentication required for initial setup)
+router.post('/setup-database', async (req, res) => {
+  try {
+    console.log('🗄️ Setting up database tables for Owner Dashboard...');
+
+    // Create agencies table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS agencies (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name VARCHAR(255) NOT NULL,
+        email VARCHAR(255),
+        phone VARCHAR(50),
+        address TEXT,
+        city VARCHAR(100),
+        country VARCHAR(100),
+        license_number VARCHAR(100),
+        specialization TEXT[],
+        description TEXT,
+        settings JSONB DEFAULT '{}',
+        owner_id UUID,
+        manager_id UUID,
+        status VARCHAR(50) DEFAULT 'active',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create users table if it doesn't exist
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        email VARCHAR(255) UNIQUE NOT NULL,
+        first_name VARCHAR(100),
+        last_name VARCHAR(100),
+        role VARCHAR(50),
+        status VARCHAR(50) DEFAULT 'active',
+        agency_id UUID,
+        invitation_token VARCHAR(255),
+        invitation_sent_at TIMESTAMP,
+        invitation_expires_at TIMESTAMP,
+        account_activated_at TIMESTAMP,
+        last_login_at TIMESTAMP,
+        agency_name VARCHAR(255),
+        invited_by VARCHAR(255),
+        phone VARCHAR(50),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Add foreign key constraint
+    await pool.query(`
+      ALTER TABLE agencies
+      ADD CONSTRAINT IF NOT EXISTS fk_agencies_manager
+      FOREIGN KEY (manager_id) REFERENCES users(id)
+    `).catch(() => {
+      // Ignore if constraint already exists
+    });
+
+    console.log('✅ Database tables created successfully');
+
+    res.json({
+      success: true,
+      message: 'Database tables created successfully',
+      tables: ['agencies', 'users'],
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('❌ Error setting up database:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to setup database',
+      error: error.message
+    });
+  }
+});
+
 // Middleware to verify owner dashboard requests
 const verifyOwnerRequest = (req, res, next) => {
   const ownerApiKey = req.headers['x-owner-api-key'];
