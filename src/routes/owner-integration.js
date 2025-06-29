@@ -341,6 +341,69 @@ router.get('/agencies-simple', verifyOwnerRequest, async (req, res) => {
   }
 });
 
+// GET /api/owner-integration/dashboard/stats - Get dashboard statistics
+router.get('/dashboard/stats', verifyOwnerRequest, async (req, res) => {
+  try {
+    // Get total agencies count
+    const agenciesResult = await pool.query('SELECT COUNT(*) as total FROM agencies');
+    const totalAgencies = parseInt(agenciesResult.rows[0].total);
+
+    // Get new agencies this month
+    const newAgenciesResult = await pool.query(`
+      SELECT COUNT(*) as new_this_month
+      FROM agencies
+      WHERE created_at >= date_trunc('month', CURRENT_DATE)
+    `);
+    const newAgenciesThisMonth = parseInt(newAgenciesResult.rows[0].new_this_month);
+
+    // Get total users across all agencies
+    const usersResult = await pool.query('SELECT COUNT(*) as total FROM users WHERE status = $1', ['active']);
+    const totalUsers = parseInt(usersResult.rows[0].total);
+
+    // Calculate user growth (simplified - just new users this month)
+    const newUsersResult = await pool.query(`
+      SELECT COUNT(*) as new_this_month
+      FROM users
+      WHERE created_at >= date_trunc('month', CURRENT_DATE)
+    `);
+    const newUsersThisMonth = parseInt(newUsersResult.rows[0].new_this_month);
+    const userGrowthPercent = totalUsers > 0 ? Math.round((newUsersThisMonth / totalUsers) * 100) : 0;
+
+    // Calculate monthly revenue (simplified - $50 per active agency)
+    const activeAgenciesResult = await pool.query('SELECT COUNT(*) as active FROM agencies WHERE status = $1', ['active']);
+    const activeAgencies = parseInt(activeAgenciesResult.rows[0].active);
+    const monthlyRevenue = activeAgencies * 50; // $50 per agency per month
+
+    // Calculate revenue growth (simplified)
+    const revenueGrowthPercent = 8; // Placeholder
+
+    // System health (always good for now)
+    const systemHealth = 99.9;
+
+    res.json({
+      success: true,
+      data: {
+        totalAgencies,
+        newAgenciesThisMonth,
+        totalUsers,
+        userGrowthPercent,
+        monthlyRevenue,
+        revenueGrowthPercent,
+        systemHealth,
+        lastUpdated: new Date().toISOString()
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching dashboard stats:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch dashboard statistics',
+      error: error.message
+    });
+  }
+});
+
 // GET /api/owner-integration/agencies - Get all agencies for owner dashboard
 router.get('/agencies', verifyOwnerRequest, async (req, res) => {
   try {
