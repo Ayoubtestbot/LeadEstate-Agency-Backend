@@ -6,17 +6,41 @@ const brevoService = require('../services/brevoService');
 const repositoryAutomationService = require('../services/repositoryAutomationService');
 const auditService = require('../services/auditService');
 
+// Add CORS headers to all routes in this router
+router.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-owner-api-key');
+
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
+  next();
+});
+
+// Simple test route (no authentication required)
+router.get('/test', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Owner Integration API is working!',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
+
 // Middleware to verify owner dashboard requests
 const verifyOwnerRequest = (req, res, next) => {
   const ownerApiKey = req.headers['x-owner-api-key'];
-  
+
   if (!ownerApiKey || ownerApiKey !== process.env.OWNER_API_KEY) {
     return res.status(401).json({
       success: false,
       message: 'Unauthorized: Invalid owner API key'
     });
   }
-  
+
   next();
 };
 
