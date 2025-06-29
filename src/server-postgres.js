@@ -1530,6 +1530,14 @@ app.get('/api/dashboard/stats', async (req, res) => {
   }
 });
 
+// Invitation routes
+const invitationRoutes = require('./routes/invitations');
+app.use('/api/invitations', invitationRoutes);
+
+// Account setup routes
+const accountSetupRoutes = require('./routes/account-setup');
+app.use('/api/account-setup', accountSetupRoutes);
+
 // Error handling
 app.use((req, res) => {
   res.status(404).json({

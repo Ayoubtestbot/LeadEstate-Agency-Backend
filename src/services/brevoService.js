@@ -1,5 +1,11 @@
 const axios = require('axios');
 const logger = require('../utils/logger');
+const {
+  getManagerInvitationTemplate,
+  getAgentInvitationTemplate,
+  getSetupReminderTemplate,
+  getAccountCreatedTemplate
+} = require('../templates/emailTemplates');
 
 class BrevoService {
   constructor() {
@@ -244,6 +250,298 @@ class BrevoService {
       subject,
       html,
       tags: ['password-reset', 'security']
+    });
+  }
+
+  // Enhanced Manager Invitation Email
+  async sendManagerInvitation(data) {
+    const {
+      managerEmail,
+      managerName,
+      agencyName,
+      invitedBy,
+      setupLink,
+      expiresIn = '48 hours'
+    } = data;
+
+    const subject = `🏢 You're invited to manage ${agencyName} on LeadEstate!`;
+    const html = getManagerInvitationTemplate({
+      managerName,
+      agencyName,
+      invitedBy,
+      setupLink,
+      expiresIn
+    });
+
+    return this.sendEmail({
+      to: managerEmail,
+      subject,
+      html,
+      tags: ['manager-invitation', 'onboarding', 'high-priority']
+    });
+  }
+
+  // Enhanced Agent Invitation Email
+  async sendAgentInvitation(data) {
+    const {
+      agentEmail,
+      agentName,
+      agencyName,
+      managerName,
+      role,
+      setupLink,
+      expiresIn = '7 days',
+      agencyInfo = {}
+    } = data;
+
+    const roleDisplayName = role === 'super_agent' ? 'Super Agent' : 'Agent';
+    const subject = `🎯 Join ${agencyName} as a ${roleDisplayName} - LeadEstate Invitation`;
+
+    const html = getAgentInvitationTemplate({
+      agentName,
+      agencyName,
+      managerName,
+      role,
+      setupLink,
+      expiresIn,
+      agencyInfo
+    });
+
+    return this.sendEmail({
+      to: agentEmail,
+      subject,
+      html,
+      tags: ['agent-invitation', 'onboarding', role]
+    });
+  }
+
+  // Account Setup Reminder Email
+  async sendSetupReminder(data) {
+    const {
+      userEmail,
+      userName,
+      role,
+      setupLink,
+      expiresIn,
+      agencyName
+    } = data;
+
+    const subject = `⏰ Reminder: Complete your ${agencyName} account setup`;
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); padding: 30px; text-align: center; border-radius: 8px 8px 0 0;">
+          <h1 style="color: white; margin: 0;">⏰ Account Setup Reminder</h1>
+        </div>
+
+        <div style="background: white; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px;">
+          <p>Hi <strong>${userName}</strong>,</p>
+
+          <p>We noticed you haven't completed your account setup for <strong>${agencyName}</strong> yet.</p>
+
+          <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 20px; margin: 20px 0; border-radius: 0 8px 8px 0;">
+            <p style="margin: 0;"><strong>⚠️ Your invitation expires in ${expiresIn}!</strong></p>
+            <p style="margin: 10px 0 0 0;">Don't miss this opportunity to join the team.</p>
+          </div>
+
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${setupLink}"
+               style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color: white; padding: 16px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block;">
+              Complete Account Setup
+            </a>
+          </div>
+
+          <p>If you have any questions or need assistance, please don't hesitate to contact our support team.</p>
+
+          <p>Best regards,<br>The LeadEstate Team</p>
+        </div>
+      </div>
+    `;
+
+    return this.sendEmail({
+      to: userEmail,
+      subject,
+      html,
+      tags: ['setup-reminder', 'follow-up']
+    });
+  }
+
+  // Account Successfully Created Email
+  async sendAccountCreatedConfirmation(data) {
+    const {
+      userEmail,
+      userName,
+      role,
+      agencyName,
+      loginUrl,
+      managerName
+    } = data;
+
+    const subject = `✅ Welcome to ${agencyName}! Your account is ready`;
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 30px; text-align: center; border-radius: 8px 8px 0 0;">
+          <h1 style="color: white; margin: 0;">🎉 Account Created Successfully!</h1>
+        </div>
+
+        <div style="background: white; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px;">
+          <p>Hi <strong>${userName}</strong>,</p>
+
+          <p>Congratulations! Your account for <strong>${agencyName}</strong> has been successfully created.</p>
+
+          <div style="background-color: #d1fae5; border-left: 4px solid #10b981; padding: 20px; margin: 20px 0; border-radius: 0 8px 8px 0;">
+            <h3 style="margin-top: 0; color: #059669;">🚀 You're all set!</h3>
+            <p><strong>Agency:</strong> ${agencyName}</p>
+            <p><strong>Role:</strong> ${role}</p>
+            ${managerName ? `<p><strong>Manager:</strong> ${managerName}</p>` : ''}
+          </div>
+
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${loginUrl}"
+               style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color: white; padding: 16px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block;">
+              Access Your Dashboard
+            </a>
+          </div>
+
+          <h3>Next Steps:</h3>
+          <ul>
+            <li>📊 Explore your dashboard and familiarize yourself with the features</li>
+            <li>👤 Complete your profile information</li>
+            <li>🏠 Start managing leads and properties</li>
+            <li>📱 Download our mobile app for on-the-go access</li>
+          </ul>
+
+          <p>If you need any help getting started, our support team is here to assist you.</p>
+
+          <p>Welcome to the team!</p>
+
+          <p>Best regards,<br>The LeadEstate Team</p>
+        </div>
+      </div>
+    `;
+
+    return this.sendEmail({
+      to: userEmail,
+      subject,
+      html,
+      tags: ['account-created', 'welcome', 'success']
+    });
+  }
+
+  // Enhanced Manager Invitation Email
+  async sendManagerInvitation(data) {
+    const {
+      managerEmail,
+      managerName,
+      agencyName,
+      invitedBy,
+      setupLink,
+      expiresIn = '48 hours'
+    } = data;
+
+    const subject = `🏢 You're invited to manage ${agencyName} on LeadEstate!`;
+    const html = getManagerInvitationTemplate({
+      managerName,
+      agencyName,
+      invitedBy,
+      setupLink,
+      expiresIn
+    });
+
+    return this.sendEmail({
+      to: managerEmail,
+      subject,
+      html,
+      tags: ['manager-invitation', 'onboarding', 'high-priority']
+    });
+  }
+
+  // Enhanced Agent Invitation Email
+  async sendAgentInvitation(data) {
+    const {
+      agentEmail,
+      agentName,
+      agencyName,
+      managerName,
+      role,
+      setupLink,
+      expiresIn = '7 days',
+      agencyInfo = {}
+    } = data;
+
+    const roleDisplayName = role === 'super_agent' ? 'Super Agent' : 'Agent';
+    const subject = `🎯 Join ${agencyName} as a ${roleDisplayName} - LeadEstate Invitation`;
+
+    const html = getAgentInvitationTemplate({
+      agentName,
+      agencyName,
+      managerName,
+      role,
+      setupLink,
+      expiresIn,
+      agencyInfo
+    });
+
+    return this.sendEmail({
+      to: agentEmail,
+      subject,
+      html,
+      tags: ['agent-invitation', 'onboarding', role]
+    });
+  }
+
+  // Setup Reminder Email
+  async sendSetupReminder(data) {
+    const {
+      userEmail,
+      userName,
+      role,
+      setupLink,
+      expiresIn,
+      agencyName
+    } = data;
+
+    const subject = `⏰ Reminder: Complete your ${agencyName} account setup`;
+    const html = getSetupReminderTemplate({
+      userName,
+      role,
+      setupLink,
+      expiresIn,
+      agencyName
+    });
+
+    return this.sendEmail({
+      to: userEmail,
+      subject,
+      html,
+      tags: ['setup-reminder', 'follow-up', 'urgent']
+    });
+  }
+
+  // Account Created Confirmation Email
+  async sendAccountCreatedConfirmation(data) {
+    const {
+      userEmail,
+      userName,
+      role,
+      agencyName,
+      loginUrl,
+      managerName
+    } = data;
+
+    const subject = `✅ Welcome to ${agencyName}! Your account is ready`;
+    const html = getAccountCreatedTemplate({
+      userName,
+      role,
+      agencyName,
+      loginUrl,
+      managerName
+    });
+
+    return this.sendEmail({
+      to: userEmail,
+      subject,
+      html,
+      tags: ['account-created', 'welcome', 'success']
     });
   }
 
