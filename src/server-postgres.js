@@ -1546,7 +1546,7 @@ app.use('/api/admin', adminRoutes);
 const userManagementRoutes = require('./routes/user-management');
 app.use('/api/user-management', userManagementRoutes);
 
-// Agency management routes
+// Agency management routes (limited to single agency operations)
 const agencyManagementRoutes = require('./routes/agency-management');
 app.use('/api/agency-management', agencyManagementRoutes);
 
@@ -1557,6 +1557,10 @@ app.use('/api/audit', auditRoutes);
 // Advanced analytics routes
 const advancedAnalyticsRoutes = require('./routes/advanced-analytics');
 app.use('/api/advanced-analytics', advancedAnalyticsRoutes);
+
+// Owner dashboard integration routes
+const ownerIntegrationRoutes = require('./routes/owner-integration');
+app.use('/api/owner-integration', ownerIntegrationRoutes);
 
 // Initialize services
 const reminderService = require('./services/reminderService');
