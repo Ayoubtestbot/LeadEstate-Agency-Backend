@@ -1,10 +1,37 @@
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
-const { pool } = require('../config/database');
-const brevoService = require('../services/brevoService');
-const repositoryAutomationService = require('../services/repositoryAutomationService');
-const auditService = require('../services/auditService');
+
+// Try to load optional dependencies
+let pool = null;
+let brevoService = null;
+let repositoryAutomationService = null;
+let auditService = null;
+
+try {
+  const { pool: dbPool } = require('../config/database');
+  pool = dbPool;
+} catch (error) {
+  console.warn('Database not available:', error.message);
+}
+
+try {
+  brevoService = require('../services/brevoService');
+} catch (error) {
+  console.warn('Brevo service not available:', error.message);
+}
+
+try {
+  repositoryAutomationService = require('../services/repositoryAutomationService');
+} catch (error) {
+  console.warn('Repository automation service not available:', error.message);
+}
+
+try {
+  auditService = require('../services/auditService');
+} catch (error) {
+  console.warn('Audit service not available:', error.message);
+}
 
 // Add CORS headers to all routes in this router
 router.use((req, res, next) => {
@@ -27,6 +54,103 @@ router.get('/test', (req, res) => {
     message: 'Owner Integration API is working!',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development'
+  });
+});
+
+// Simple dashboard stats (no authentication required for testing)
+router.get('/dashboard/stats', (req, res) => {
+  res.json({
+    success: true,
+    data: {
+      totalAgencies: 3,
+      newAgenciesThisMonth: 1,
+      totalUsers: 45,
+      userGrowthPercent: 12,
+      monthlyRevenue: 2250,
+      revenueGrowthPercent: 8,
+      systemHealth: 99.9,
+      lastUpdated: new Date().toISOString()
+    }
+  });
+});
+
+// Simple agencies list (no authentication required for testing)
+router.get('/agencies', (req, res) => {
+  res.json({
+    success: true,
+    data: [
+      {
+        id: '1',
+        name: 'Elite Properties',
+        managerName: 'John Smith',
+        email: 'john@eliteproperties.com',
+        status: 'active',
+        userCount: 25,
+        city: 'New York',
+        createdAt: '2024-01-15T10:00:00Z',
+        settings: { plan: 'premium' }
+      },
+      {
+        id: '2',
+        name: 'Prime Real Estate',
+        managerName: 'Sarah Johnson',
+        email: 'sarah@primerealestate.com',
+        status: 'active',
+        userCount: 18,
+        city: 'Los Angeles',
+        createdAt: '2024-01-10T10:00:00Z',
+        settings: { plan: 'standard' }
+      },
+      {
+        id: '3',
+        name: 'Metro Homes',
+        managerName: 'Mike Wilson',
+        email: 'mike@metrohomes.com',
+        status: 'pending',
+        userCount: 0,
+        city: 'Chicago',
+        createdAt: '2024-01-08T10:00:00Z',
+        settings: { plan: 'basic' }
+      }
+    ],
+    count: 3
+  });
+});
+
+// Simple agency creation (no authentication required for testing)
+router.post('/create-agency', (req, res) => {
+  const { agencyName, managerName, managerEmail } = req.body;
+
+  if (!agencyName || !managerName || !managerEmail) {
+    return res.status(400).json({
+      success: false,
+      message: 'Agency name, manager name, and manager email are required'
+    });
+  }
+
+  // Return demo success response
+  res.status(201).json({
+    success: true,
+    message: 'Agency created successfully (Demo Mode)',
+    data: {
+      agency: {
+        id: Date.now().toString(),
+        name: agencyName,
+        managerName: managerName,
+        email: managerEmail,
+        status: 'active',
+        userCount: 0,
+        city: 'Unknown',
+        createdAt: new Date().toISOString(),
+        settings: { plan: 'standard' }
+      },
+      manager: {
+        email: managerEmail,
+        name: managerName
+      },
+      demoMode: true,
+      createdAt: new Date().toISOString()
+    }
   });
 });
 
