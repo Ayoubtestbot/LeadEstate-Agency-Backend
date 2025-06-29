@@ -280,18 +280,45 @@ router.post('/create-agency', verifyOwnerRequest, async (req, res) => {
   }
 });
 
+// GET /api/owner-integration/agencies-simple - Get agencies without joins (for testing)
+router.get('/agencies-simple', verifyOwnerRequest, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM agencies ORDER BY created_at DESC');
+
+    res.json({
+      success: true,
+      data: result.rows,
+      count: result.rows.length,
+      message: 'Simple agencies query (no joins)'
+    });
+
+  } catch (error) {
+    console.error('Error fetching agencies (simple):', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch agencies (simple)',
+      error: error.message
+    });
+  }
+});
+
 // GET /api/owner-integration/agencies - Get all agencies for owner dashboard
 router.get('/agencies', verifyOwnerRequest, async (req, res) => {
   try {
     const { status, search, limit = 50, offset = 0 } = req.query;
 
+    // Simplified query that doesn't rely on potentially missing columns
     let query = `
       SELECT
-        a.*,
-        u.first_name as manager_name,
-        u.email as manager_email,
-        u.status as manager_status,
-        COALESCE(u.last_login_at, u.created_at) as manager_last_login,
+        a.id,
+        a.name,
+        a.email,
+        a.status,
+        a.created_at,
+        a.settings,
+        COALESCE(u.first_name, 'Unknown') as manager_name,
+        COALESCE(u.email, a.email) as manager_email,
+        COALESCE(u.status, 'unknown') as manager_status,
         0 as active_users,
         0 as pending_users,
         0 as total_leads,
