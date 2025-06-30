@@ -350,7 +350,7 @@ router.post('/create-agency', async (req, res) => {
     // Generate UUIDs for agency and manager
     const crypto = require('crypto');
     const agencyId = crypto.randomUUID();
-    const managerId = crypto.randomUUID();
+    let managerId = crypto.randomUUID();
 
     // Insert agency into database
     const agencyResult = await pool.query(`
@@ -373,26 +373,40 @@ router.post('/create-agency', async (req, res) => {
     const bcrypt = require('bcryptjs');
     const tempPassword = await bcrypt.hash('TempPassword123!', 10);
 
-    // Split manager name into first and last name
-    const nameParts = managerName.trim().split(' ');
-    const firstName = nameParts[0] || managerName;
-    const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : 'Manager';
+    // Check if email already exists
+    const existingUser = await pool.query('SELECT id FROM users WHERE email = $1', [managerEmail]);
 
-    const managerResult = await pool.query(`
-      INSERT INTO users (
-        id, email, first_name, last_name, role, status, agency_id, password, created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
-      RETURNING *
-    `, [
-      managerId,
-      managerEmail,
-      firstName,
-      lastName,
-      'manager',
-      'invited', // Set as invited so they need to set their own password
-      agencyId,
-      tempPassword
-    ]);
+    let managerResult;
+    if (existingUser.rows.length > 0) {
+      // Use existing user as manager
+      const existingUserId = existingUser.rows[0].id;
+      managerResult = { rows: [{ id: existingUserId }] };
+      managerId = existingUserId;
+      console.log('📧 Using existing user as manager:', managerEmail);
+    } else {
+      // Create new user
+      // Split manager name into first and last name
+      const nameParts = managerName.trim().split(' ');
+      const firstName = nameParts[0] || managerName;
+      const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : 'Manager';
+
+      managerResult = await pool.query(`
+        INSERT INTO users (
+          id, email, first_name, last_name, role, status, agency_id, password, created_at, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+        RETURNING *
+      `, [
+        managerId,
+        managerEmail,
+        firstName,
+        lastName,
+        'manager',
+        'invited', // Set as invited so they need to set their own password
+        agencyId,
+        tempPassword
+      ]);
+      console.log('👤 Created new manager user:', managerEmail);
+    }
 
     // Update agency with manager_id
     await pool.query(
