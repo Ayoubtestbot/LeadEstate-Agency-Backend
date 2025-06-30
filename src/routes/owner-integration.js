@@ -362,15 +362,21 @@ router.post('/create-agency', async (req, res) => {
     const bcrypt = require('bcryptjs');
     const tempPassword = await bcrypt.hash('TempPassword123!', 10);
 
+    // Split manager name into first and last name
+    const nameParts = managerName.trim().split(' ');
+    const firstName = nameParts[0] || managerName;
+    const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : 'Manager';
+
     const managerResult = await pool.query(`
       INSERT INTO users (
-        id, email, first_name, role, status, agency_id, password, created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+        id, email, first_name, last_name, role, status, agency_id, password, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
       RETURNING *
     `, [
       managerId,
       managerEmail,
-      managerName,
+      firstName,
+      lastName,
       'manager',
       'invited', // Set as invited so they need to set their own password
       agencyId,
