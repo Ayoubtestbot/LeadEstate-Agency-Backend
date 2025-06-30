@@ -423,6 +423,14 @@ router.post('/create-agency', async (req, res) => {
     }
 
     console.error('❌ Error creating agency in database:', error);
+    console.error('❌ Error details:', {
+      message: error.message,
+      code: error.code,
+      detail: error.detail,
+      constraint: error.constraint,
+      table: error.table,
+      column: error.column
+    });
 
     // Fallback to demo mode on database error
     res.status(201).json({
@@ -441,7 +449,13 @@ router.post('/create-agency', async (req, res) => {
           settings: { plan: plan || 'standard' }
         },
         demoMode: true,
-        error: error.message
+        error: error.message,
+        errorDetails: {
+          code: error.code,
+          constraint: error.constraint,
+          table: error.table,
+          column: error.column
+        }
       }
     });
   }
