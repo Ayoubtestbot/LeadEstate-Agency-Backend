@@ -205,7 +205,7 @@ router.get('/agencies', async (req, res) => {
         a.description,
         COALESCE(u.first_name, 'Unknown') as manager_name,
         COALESCE(u.email, a.email) as manager_email,
-        (SELECT COUNT(*) FROM users WHERE agency_id = a.id AND status = 'active') as user_count
+        (SELECT COUNT(*) FROM users WHERE agency_id::text = a.id::text AND status = 'active') as user_count
       FROM agencies a
       LEFT JOIN users u ON a.manager_id = u.id
       WHERE 1=1
