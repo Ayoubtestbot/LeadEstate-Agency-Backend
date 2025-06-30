@@ -302,6 +302,17 @@ router.get('/agencies', async (req, res) => {
 router.post('/create-agency', async (req, res) => {
   const { agencyName, managerName, managerEmail, city, plan, description } = req.body;
 
+  // Debug: Log received data
+  console.log('🔍 Received agency creation data:', {
+    agencyName,
+    managerName,
+    managerEmail,
+    city,
+    plan,
+    description,
+    fullBody: req.body
+  });
+
   if (!agencyName || !managerName || !managerEmail) {
     return res.status(400).json({
       success: false,
@@ -355,7 +366,7 @@ router.post('/create-agency', async (req, res) => {
       'active',
       JSON.stringify({ plan: plan || 'standard' }),
       description || `${agencyName} - Professional Real Estate Agency`,
-      city || 'Unknown'
+      city && city.trim() ? city.trim() : 'Not Specified'
     ]);
 
     // Insert manager user into database with temporary password
