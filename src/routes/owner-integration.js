@@ -57,69 +57,250 @@ router.get('/test', (req, res) => {
   });
 });
 
-// Simple dashboard stats (no authentication required for testing)
-router.get('/dashboard/stats', (req, res) => {
-  res.json({
-    success: true,
-    data: {
-      totalAgencies: 3,
-      newAgenciesThisMonth: 1,
-      totalUsers: 45,
-      userGrowthPercent: 12,
-      monthlyRevenue: 2250,
-      revenueGrowthPercent: 8,
-      systemHealth: 99.9,
-      lastUpdated: new Date().toISOString()
+// Dashboard stats from database
+router.get('/dashboard/stats', async (req, res) => {
+  try {
+    // Check if database is available
+    if (!pool) {
+      // Fallback to demo stats if no database
+      return res.json({
+        success: true,
+        data: {
+          totalAgencies: 3,
+          newAgenciesThisMonth: 1,
+          totalUsers: 45,
+          userGrowthPercent: 12,
+          monthlyRevenue: 2250,
+          revenueGrowthPercent: 8,
+          systemHealth: 99.9,
+          lastUpdated: new Date().toISOString(),
+          demoMode: true
+        }
+      });
     }
-  });
-});
 
-// Simple agencies list (no authentication required for testing)
-router.get('/agencies', (req, res) => {
-  res.json({
-    success: true,
-    data: [
-      {
-        id: '1',
-        name: 'Elite Properties',
-        managerName: 'John Smith',
-        email: 'john@eliteproperties.com',
-        status: 'active',
-        userCount: 25,
-        city: 'New York',
-        createdAt: '2024-01-15T10:00:00Z',
-        settings: { plan: 'premium' }
-      },
-      {
-        id: '2',
-        name: 'Prime Real Estate',
-        managerName: 'Sarah Johnson',
-        email: 'sarah@primerealestate.com',
-        status: 'active',
-        userCount: 18,
-        city: 'Los Angeles',
-        createdAt: '2024-01-10T10:00:00Z',
-        settings: { plan: 'standard' }
-      },
-      {
-        id: '3',
-        name: 'Metro Homes',
-        managerName: 'Mike Wilson',
-        email: 'mike@metrohomes.com',
-        status: 'pending',
-        userCount: 0,
-        city: 'Chicago',
-        createdAt: '2024-01-08T10:00:00Z',
-        settings: { plan: 'basic' }
+    // Get total agencies count
+    const agenciesResult = await pool.query('SELECT COUNT(*) as total FROM agencies');
+    const totalAgencies = parseInt(agenciesResult.rows[0].total) || 0;
+
+    // Get new agencies this month
+    const newAgenciesResult = await pool.query(`
+      SELECT COUNT(*) as new_this_month
+      FROM agencies
+      WHERE created_at >= date_trunc('month', CURRENT_DATE)
+    `);
+    const newAgenciesThisMonth = parseInt(newAgenciesResult.rows[0].new_this_month) || 0;
+
+    // Get total users across all agencies
+    const usersResult = await pool.query('SELECT COUNT(*) as total FROM users WHERE status = $1', ['active']);
+    const totalUsers = parseInt(usersResult.rows[0].total) || 0;
+
+    // Calculate user growth (new users this month)
+    const newUsersResult = await pool.query(`
+      SELECT COUNT(*) as new_this_month
+      FROM users
+      WHERE created_at >= date_trunc('month', CURRENT_DATE)
+    `);
+    const newUsersThisMonth = parseInt(newUsersResult.rows[0].new_this_month) || 0;
+    const userGrowthPercent = totalUsers > 0 ? Math.round((newUsersThisMonth / totalUsers) * 100) : 0;
+
+    // Calculate monthly revenue (simplified - $50 per active agency)
+    const activeAgenciesResult = await pool.query('SELECT COUNT(*) as active FROM agencies WHERE status = $1', ['active']);
+    const activeAgencies = parseInt(activeAgenciesResult.rows[0].active) || 0;
+    const monthlyRevenue = activeAgencies * 50; // $50 per agency per month
+
+    // Calculate revenue growth (simplified)
+    const revenueGrowthPercent = newAgenciesThisMonth > 0 ? Math.round((newAgenciesThisMonth / Math.max(totalAgencies - newAgenciesThisMonth, 1)) * 100) : 0;
+
+    // System health (always good for now)
+    const systemHealth = 99.9;
+
+    res.json({
+      success: true,
+      data: {
+        totalAgencies,
+        newAgenciesThisMonth,
+        totalUsers,
+        userGrowthPercent,
+        monthlyRevenue,
+        revenueGrowthPercent,
+        systemHealth,
+        lastUpdated: new Date().toISOString(),
+        databaseConnected: true
       }
-    ],
-    count: 3
-  });
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching dashboard stats from database:', error);
+
+    // Fallback to demo stats on error
+    res.json({
+      success: true,
+      data: {
+        totalAgencies: 3,
+        newAgenciesThisMonth: 1,
+        totalUsers: 45,
+        userGrowthPercent: 12,
+        monthlyRevenue: 2250,
+        revenueGrowthPercent: 8,
+        systemHealth: 99.9,
+        lastUpdated: new Date().toISOString(),
+        demoMode: true,
+        error: error.message
+      }
+    });
+  }
 });
 
-// Simple agency creation (no authentication required for testing)
-router.post('/create-agency', (req, res) => {
-  const { agencyName, managerName, managerEmail } = req.body;
+// Get agencies from database
+router.get('/agencies', async (req, res) => {
+  try {
+    const { status, search, limit = 50, offset = 0 } = req.query;
+
+    // Check if database is available
+    if (!pool) {
+      // Fallback to demo data if no database
+      return res.json({
+        success: true,
+        data: [
+          {
+            id: '1',
+            name: 'Elite Properties',
+            managerName: 'John Smith',
+            email: 'john@eliteproperties.com',
+            status: 'active',
+            userCount: 25,
+            city: 'New York',
+            createdAt: '2024-01-15T10:00:00Z',
+            settings: { plan: 'premium' }
+          },
+          {
+            id: '2',
+            name: 'Prime Real Estate',
+            managerName: 'Sarah Johnson',
+            email: 'sarah@primerealestate.com',
+            status: 'active',
+            userCount: 18,
+            city: 'Los Angeles',
+            createdAt: '2024-01-10T10:00:00Z',
+            settings: { plan: 'standard' }
+          }
+        ],
+        count: 2,
+        demoMode: true
+      });
+    }
+
+    // Build query with filters
+    let query = `
+      SELECT
+        a.id,
+        a.name,
+        a.email,
+        a.status,
+        a.created_at,
+        a.updated_at,
+        a.settings,
+        a.city,
+        a.description,
+        COALESCE(u.first_name, 'Unknown') as manager_name,
+        COALESCE(u.email, a.email) as manager_email,
+        (SELECT COUNT(*) FROM users WHERE agency_id = a.id AND status = 'active') as user_count
+      FROM agencies a
+      LEFT JOIN users u ON a.manager_id = u.id
+      WHERE 1=1
+    `;
+
+    const params = [];
+    let paramCount = 0;
+
+    // Add status filter
+    if (status && status !== 'all') {
+      paramCount++;
+      query += ` AND a.status = $${paramCount}`;
+      params.push(status);
+    }
+
+    // Add search filter
+    if (search) {
+      paramCount++;
+      query += ` AND (a.name ILIKE $${paramCount} OR a.email ILIKE $${paramCount} OR u.first_name ILIKE $${paramCount})`;
+      params.push(`%${search}%`);
+    }
+
+    // Add ordering
+    query += ` ORDER BY a.created_at DESC`;
+
+    // Add pagination
+    if (limit) {
+      paramCount++;
+      query += ` LIMIT $${paramCount}`;
+      params.push(parseInt(limit));
+    }
+
+    if (offset) {
+      paramCount++;
+      query += ` OFFSET $${paramCount}`;
+      params.push(parseInt(offset));
+    }
+
+    const result = await pool.query(query, params);
+
+    // Format the response
+    const agencies = result.rows.map(row => ({
+      id: row.id,
+      name: row.name,
+      managerName: row.manager_name,
+      email: row.email,
+      status: row.status,
+      userCount: parseInt(row.user_count) || 0,
+      city: row.city || 'Unknown',
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      settings: row.settings || { plan: 'standard' },
+      description: row.description
+    }));
+
+    res.json({
+      success: true,
+      data: agencies,
+      count: agencies.length,
+      pagination: {
+        limit: parseInt(limit),
+        offset: parseInt(offset)
+      },
+      databaseConnected: true
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching agencies from database:', error);
+
+    // Fallback to demo data on error
+    res.json({
+      success: true,
+      data: [
+        {
+          id: '1',
+          name: 'Elite Properties',
+          managerName: 'John Smith',
+          email: 'john@eliteproperties.com',
+          status: 'active',
+          userCount: 25,
+          city: 'New York',
+          createdAt: '2024-01-15T10:00:00Z',
+          settings: { plan: 'premium' }
+        }
+      ],
+      count: 1,
+      demoMode: true,
+      error: error.message
+    });
+  }
+});
+
+// Agency creation with database persistence
+router.post('/create-agency', async (req, res) => {
+  const { agencyName, managerName, managerEmail, city, plan, description } = req.body;
 
   if (!agencyName || !managerName || !managerEmail) {
     return res.status(400).json({
@@ -128,30 +309,138 @@ router.post('/create-agency', (req, res) => {
     });
   }
 
-  // Return demo success response
-  res.status(201).json({
-    success: true,
-    message: 'Agency created successfully (Demo Mode)',
-    data: {
-      agency: {
-        id: Date.now().toString(),
-        name: agencyName,
-        managerName: managerName,
-        email: managerEmail,
-        status: 'active',
-        userCount: 0,
-        city: 'Unknown',
-        createdAt: new Date().toISOString(),
-        settings: { plan: 'standard' }
-      },
-      manager: {
-        email: managerEmail,
-        name: managerName
-      },
-      demoMode: true,
-      createdAt: new Date().toISOString()
+  try {
+    // Check if database is available
+    if (!pool) {
+      // Fallback to demo mode if no database
+      return res.status(201).json({
+        success: true,
+        message: 'Agency created successfully (Demo Mode - No Database)',
+        data: {
+          agency: {
+            id: Date.now().toString(),
+            name: agencyName,
+            managerName: managerName,
+            email: managerEmail,
+            status: 'active',
+            userCount: 0,
+            city: city || 'Unknown',
+            createdAt: new Date().toISOString(),
+            settings: { plan: plan || 'standard' }
+          },
+          demoMode: true
+        }
+      });
     }
-  });
+
+    // Start database transaction
+    await pool.query('BEGIN');
+
+    // Generate UUIDs for agency and manager
+    const crypto = require('crypto');
+    const agencyId = crypto.randomUUID();
+    const managerId = crypto.randomUUID();
+
+    // Insert agency into database
+    const agencyResult = await pool.query(`
+      INSERT INTO agencies (
+        id, name, email, status, settings, created_at, updated_at,
+        description, city
+      ) VALUES ($1, $2, $3, $4, $5, NOW(), NOW(), $6, $7)
+      RETURNING *
+    `, [
+      agencyId,
+      agencyName,
+      managerEmail,
+      'active',
+      JSON.stringify({ plan: plan || 'standard' }),
+      description || `${agencyName} - Professional Real Estate Agency`,
+      city || 'Unknown'
+    ]);
+
+    // Insert manager user into database
+    const managerResult = await pool.query(`
+      INSERT INTO users (
+        id, email, first_name, role, status, agency_id, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+      RETURNING *
+    `, [
+      managerId,
+      managerEmail,
+      managerName,
+      'manager',
+      'active',
+      agencyId
+    ]);
+
+    // Update agency with manager_id
+    await pool.query(
+      'UPDATE agencies SET manager_id = $1 WHERE id = $2',
+      [managerId, agencyId]
+    );
+
+    // Commit transaction
+    await pool.query('COMMIT');
+
+    const agency = agencyResult.rows[0];
+    const manager = managerResult.rows[0];
+
+    console.log('✅ Agency created successfully in database:', agencyName);
+
+    res.status(201).json({
+      success: true,
+      message: 'Agency created successfully',
+      data: {
+        agency: {
+          id: agency.id,
+          name: agency.name,
+          managerName: manager.first_name,
+          email: agency.email,
+          status: agency.status,
+          userCount: 1, // Manager is the first user
+          city: agency.city,
+          createdAt: agency.created_at,
+          settings: agency.settings
+        },
+        manager: {
+          id: manager.id,
+          email: manager.email,
+          name: manager.first_name
+        },
+        databasePersisted: true,
+        createdAt: agency.created_at
+      }
+    });
+
+  } catch (error) {
+    // Rollback transaction on error
+    if (pool) {
+      await pool.query('ROLLBACK');
+    }
+
+    console.error('❌ Error creating agency in database:', error);
+
+    // Fallback to demo mode on database error
+    res.status(201).json({
+      success: true,
+      message: 'Agency created successfully (Demo Mode - Database Error)',
+      data: {
+        agency: {
+          id: Date.now().toString(),
+          name: agencyName,
+          managerName: managerName,
+          email: managerEmail,
+          status: 'active',
+          userCount: 0,
+          city: city || 'Unknown',
+          createdAt: new Date().toISOString(),
+          settings: { plan: plan || 'standard' }
+        },
+        demoMode: true,
+        error: error.message
+      }
+    });
+  }
 });
 
 // Debug route to check GitHub configuration

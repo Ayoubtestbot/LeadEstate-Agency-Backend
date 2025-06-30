@@ -1,7 +1,7 @@
 {
   "name": "leadestate-agency-backend",
   "version": "1.0.0",
-  "description": "LeadEstate Agency Backend API - Complete Real Estate CRM API",
+  "description": "LeadEstate Agency Backend API - Complete Real Estate CRM API with Database Integration",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server-postgres.js",
