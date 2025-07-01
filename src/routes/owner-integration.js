@@ -916,8 +916,46 @@ router.get('/debug-github', (req, res) => {
       owner: process.env.GITHUB_OWNER,
       ownerApiKey: !!process.env.OWNER_API_KEY
     },
+    services: {
+      repositoryAutomationService: !!repositoryAutomationService,
+      repositoryServiceType: repositoryAutomationService ? typeof repositoryAutomationService : 'undefined'
+    },
     timestamp: new Date().toISOString()
   });
+});
+
+// Debug route to test repository service
+router.get('/debug-repository-service', async (req, res) => {
+  try {
+    if (!repositoryAutomationService) {
+      return res.json({
+        success: false,
+        error: 'Repository automation service not loaded',
+        details: 'Service is null or undefined'
+      });
+    }
+
+    // Test basic service functionality
+    const testSlug = repositoryAutomationService.generateAgencySlug('Test Agency Name');
+
+    res.json({
+      success: true,
+      service: {
+        loaded: true,
+        testSlug,
+        hasOctokit: !!repositoryAutomationService.octokit,
+        templateRepos: repositoryAutomationService.templateRepos,
+        ownerUsername: repositoryAutomationService.ownerUsername
+      }
+    });
+
+  } catch (error) {
+    res.json({
+      success: false,
+      error: error.message,
+      stack: error.stack
+    });
+  }
 });
 
 // GET /api/owner-integration/settings - Get owner settings
