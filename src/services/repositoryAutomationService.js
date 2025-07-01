@@ -76,6 +76,73 @@ class RepositoryAutomationService {
     }
   }
 
+  // Validate that template repositories exist
+  async validateTemplateRepositories() {
+    try {
+      console.log('🔍 Validating template repositories...');
+
+      const frontendCheck = await this.octokit.repos.get({
+        owner: this.ownerUsername,
+        repo: this.templateRepos.frontend
+      });
+
+      const backendCheck = await this.octokit.repos.get({
+        owner: this.ownerUsername,
+        repo: this.templateRepos.backend
+      });
+
+      console.log('✅ Template repositories validated:', {
+        frontend: frontendCheck.data.name,
+        backend: backendCheck.data.name
+      });
+
+      return true;
+    } catch (error) {
+      console.error('❌ Template repository validation failed:', error.message);
+      throw new Error(`Template repositories not found. Please ensure ${this.templateRepos.frontend} and ${this.templateRepos.backend} exist.`);
+    }
+  }
+
+  // Generate deployment information for manual setup
+  async generateDeploymentInfo(repoNames, agencyData, agencySlug) {
+    return {
+      frontend: {
+        repository: `https://github.com/${this.ownerUsername}/${repoNames.frontend}`,
+        suggestedUrl: `https://${agencyData.domain || agencySlug + '.leadestate.com'}`,
+        platform: 'Vercel',
+        buildCommand: 'npm run build',
+        outputDirectory: 'dist',
+        environmentVariables: {
+          VITE_API_URL: `https://${agencySlug}-api.leadestate.com`,
+          VITE_AGENCY_NAME: agencyData.name,
+          VITE_AGENCY_ID: agencySlug
+        }
+      },
+      backend: {
+        repository: `https://github.com/${this.ownerUsername}/${repoNames.backend}`,
+        suggestedUrl: `https://${agencySlug}-api.leadestate.com`,
+        platform: 'Render',
+        buildCommand: 'npm install',
+        startCommand: 'npm start',
+        environmentVariables: {
+          NODE_ENV: 'production',
+          DATABASE_URL: 'YOUR_DATABASE_URL',
+          JWT_SECRET: 'YOUR_JWT_SECRET',
+          BREVO_API_KEY: 'YOUR_BREVO_API_KEY',
+          TWILIO_ACCOUNT_SID: 'YOUR_TWILIO_SID',
+          TWILIO_AUTH_TOKEN: 'YOUR_TWILIO_TOKEN',
+          FRONTEND_URL: `https://${agencyData.domain || agencySlug + '.leadestate.com'}`
+        }
+      },
+      database: {
+        platform: 'Railway',
+        type: 'PostgreSQL',
+        name: `${agencySlug}_db`,
+        user: `${agencySlug}_user`
+      }
+    };
+  }
+
   // Generate agency slug for repository names
   generateAgencySlug(agencyName) {
     return agencyName
