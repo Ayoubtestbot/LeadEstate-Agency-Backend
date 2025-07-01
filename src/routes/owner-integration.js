@@ -22,9 +22,11 @@ try {
 }
 
 try {
-  repositoryAutomationService = require('../services/repositoryAutomationService');
+  const RepositoryAutomationService = require('../services/repositoryAutomationService');
+  repositoryAutomationService = new RepositoryAutomationService();
+  console.log('✅ Repository automation service loaded successfully');
 } catch (error) {
-  console.warn('Repository automation service not available:', error.message);
+  console.warn('⚠️ Repository automation service not available:', error.message);
 }
 
 try {
@@ -368,7 +370,41 @@ router.post('/create-agency', async (req, res) => {
       });
     }
 
-    // Start database transaction
+    // Step 1: Create GitHub repositories (if available)
+    let repositoryResult = null;
+    if (repositoryAutomationService) {
+      console.log('🚀 Creating GitHub repositories for agency:', agencyName);
+      try {
+        repositoryResult = await repositoryAutomationService.createAgencyRepositories({
+          name: agencyName,
+          managerName,
+          managerEmail,
+          city,
+          plan,
+          description,
+          billingCycle,
+          customPrice,
+          paymentMethod,
+          billingEmail,
+          billingAddress,
+          taxId,
+          notes
+        });
+
+        if (repositoryResult.success) {
+          console.log('✅ GitHub repositories created successfully');
+        } else {
+          console.warn('⚠️ Repository creation failed:', repositoryResult.error);
+        }
+      } catch (repoError) {
+        console.error('❌ Repository creation error:', repoError.message);
+        repositoryResult = { success: false, error: repoError.message };
+      }
+    } else {
+      console.log('⚠️ Repository automation service not available');
+    }
+
+    // Step 2: Start database transaction
     await pool.query('BEGIN');
 
     // Generate UUIDs for agency and manager
@@ -489,7 +525,9 @@ router.post('/create-agency', async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'Agency created successfully',
+      message: repositoryResult?.success
+        ? 'Agency created successfully with GitHub repositories'
+        : 'Agency created successfully (repositories creation failed)',
       data: {
         agency: {
           id: agency.id,
@@ -507,7 +545,13 @@ router.post('/create-agency', async (req, res) => {
           email: manager.email,
           name: manager.first_name
         },
+        repositories: repositoryResult?.success ? repositoryResult.data.repositories : {
+          status: 'failed',
+          error: repositoryResult?.error || 'Repository automation service not available'
+        },
+        deployment: repositoryResult?.success ? repositoryResult.data.deployment : null,
         databasePersisted: true,
+        repositoriesCreated: repositoryResult?.success || false,
         createdAt: agency.created_at
       }
     });
