@@ -778,7 +778,7 @@ router.get('/analytics', async (req, res) => {
     const agenciesResult = await pool.query(`
       SELECT
         a.*,
-        (SELECT COUNT(*) FROM users WHERE agency_id = a.id AND status = 'active') as user_count
+        (SELECT COUNT(*) FROM users WHERE agency_id::text = a.id::text AND status = 'active') as user_count
       FROM agencies a
       ORDER BY a.created_at DESC
     `);
