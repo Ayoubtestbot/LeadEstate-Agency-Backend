@@ -15,16 +15,43 @@ class ReminderService {
     try {
       console.log('🔄 Checking for pending invitations that need reminders...');
 
+      // First check if the invitation columns exist
+      const columnCheck = await pool.query(`
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_name = 'users'
+        AND column_name IN ('invitation_sent_at', 'invitation_expires_at', 'invitation_token')
+      `);
+
+      const hasInvitationColumns = columnCheck.rows.length >= 3;
+
+      if (!hasInvitationColumns) {
+        console.log('⚠️ Invitation system columns not found. Adding them now...');
+
+        // Add missing columns
+        await pool.query(`
+          ALTER TABLE users
+          ADD COLUMN IF NOT EXISTS invitation_token VARCHAR(255),
+          ADD COLUMN IF NOT EXISTS invitation_sent_at TIMESTAMP,
+          ADD COLUMN IF NOT EXISTS invitation_expires_at TIMESTAMP,
+          ADD COLUMN IF NOT EXISTS account_activated_at TIMESTAMP,
+          ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP,
+          ADD COLUMN IF NOT EXISTS agency_name VARCHAR(255),
+          ADD COLUMN IF NOT EXISTS invited_by VARCHAR(255)
+        `);
+
+        console.log('✅ Invitation system columns added successfully');
+      }
+
       // Get users who need reminders
       const pendingUsers = await pool.query(`
-        SELECT 
+        SELECT
           u.*,
-          EXTRACT(EPOCH FROM (NOW() - u.invitation_sent_at)) * 1000 as time_since_sent,
-          EXTRACT(EPOCH FROM (u.invitation_expires_at - NOW())) * 1000 as time_until_expiry
+          EXTRACT(EPOCH FROM (NOW() - COALESCE(u.invitation_sent_at, u.created_at))) * 1000 as time_since_sent,
+          EXTRACT(EPOCH FROM (COALESCE(u.invitation_expires_at, NOW() + INTERVAL '7 days') - NOW())) * 1000 as time_until_expiry
         FROM users u
-        WHERE u.status = 'invited' 
-        AND u.invitation_expires_at > NOW()
-        AND u.invitation_sent_at IS NOT NULL
+        WHERE u.status = 'invited'
+        AND COALESCE(u.invitation_expires_at, NOW() + INTERVAL '7 days') > NOW()
       `);
 
       const reminders = {
@@ -152,6 +179,47 @@ class ReminderService {
     }
   }
 
+  // Clean up expired invitations
+  async cleanupExpiredInvitations() {
+    try {
+      console.log('🧹 Cleaning up expired invitations...');
+
+      // Check if invitation_expires_at column exists
+      const columnCheck = await pool.query(`
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_name = 'users' AND column_name = 'invitation_expires_at'
+      `);
+
+      if (columnCheck.rows.length === 0) {
+        console.log('ℹ️ No invitation_expires_at column found, skipping cleanup');
+        return { success: true, cleanedUp: 0, details: [] };
+      }
+
+      const result = await pool.query(`
+        DELETE FROM users
+        WHERE status = 'invited'
+        AND invitation_expires_at < NOW()
+        RETURNING email, first_name, COALESCE(agency_name, 'Unknown') as agency_name, COALESCE(invited_by, 'Unknown') as invited_by
+      `);
+
+      console.log(`✅ Cleaned up ${result.rows.length} expired invitations`);
+
+      return {
+        success: true,
+        cleanedUp: result.rows.length,
+        details: result.rows
+      };
+
+    } catch (error) {
+      console.error('❌ Error cleaning up expired invitations:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
   // Start automatic reminder checking (call this on server startup)
   startReminderScheduler() {
     console.log('🕐 Starting invitation reminder scheduler...');
@@ -161,11 +229,13 @@ class ReminderService {
     
     setInterval(async () => {
       await this.sendPendingReminders();
+      await this.cleanupExpiredInvitations();
     }, checkInterval);
 
     // Run initial check after 1 minute
     setTimeout(async () => {
       await this.sendPendingReminders();
+      await this.cleanupExpiredInvitations();
     }, 60000);
 
     console.log('✅ Reminder scheduler started (checks every 6 hours)');
