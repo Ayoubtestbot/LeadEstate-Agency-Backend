@@ -433,4 +433,4 @@ For technical support, contact: support@leadestate.com
   }
 }
 
-module.exports = new RepositoryAutomationService();
+module.exports = RepositoryAutomationService;
