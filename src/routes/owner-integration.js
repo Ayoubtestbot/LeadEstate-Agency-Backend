@@ -958,6 +958,65 @@ router.get('/debug-repository-service', async (req, res) => {
   }
 });
 
+// Get manager details for an agency
+router.get('/agencies/:agencyId/manager', async (req, res) => {
+  try {
+    const { agencyId } = req.params;
+
+    if (!pool) {
+      return res.status(503).json({
+        success: false,
+        message: 'Database not available'
+      });
+    }
+
+    // Get manager details
+    const managerResult = await pool.query(`
+      SELECT
+        id, email, first_name, last_name, role, status,
+        invitation_token, invitation_sent_at, invitation_expires_at,
+        account_activated_at, created_at, updated_at
+      FROM users
+      WHERE agency_id = $1 AND role = 'manager'
+      ORDER BY created_at DESC
+      LIMIT 1
+    `, [agencyId]);
+
+    if (managerResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Manager not found for this agency'
+      });
+    }
+
+    const manager = managerResult.rows[0];
+
+    // Generate setup link if still invited
+    let setupLink = null;
+    if (manager.status === 'invited' && manager.invitation_token) {
+      setupLink = `${process.env.FRONTEND_URL}/setup-account?token=${manager.invitation_token}&type=manager`;
+    }
+
+    res.json({
+      success: true,
+      data: {
+        ...manager,
+        setupLink,
+        needsSetup: manager.status === 'invited',
+        invitationExpired: manager.invitation_expires_at && new Date() > new Date(manager.invitation_expires_at)
+      }
+    });
+
+  } catch (error) {
+    console.error('Error getting manager details:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get manager details',
+      error: error.message
+    });
+  }
+});
+
 // GET /api/owner-integration/settings - Get owner settings
 router.get('/settings', async (req, res) => {
   try {
