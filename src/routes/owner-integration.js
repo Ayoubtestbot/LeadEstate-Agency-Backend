@@ -300,7 +300,22 @@ router.get('/agencies', async (req, res) => {
 
 // Agency creation with database persistence
 router.post('/create-agency', async (req, res) => {
-  const { agencyName, managerName, managerEmail, city, plan, description } = req.body;
+  const {
+    agencyName,
+    managerName,
+    managerEmail,
+    city,
+    plan,
+    description,
+    // Billing information
+    billingCycle,
+    customPrice,
+    paymentMethod,
+    billingEmail,
+    billingAddress,
+    taxId,
+    notes
+  } = req.body;
 
   // Debug: Log received data
   console.log('🔍 Received agency creation data:', {
@@ -310,6 +325,15 @@ router.post('/create-agency', async (req, res) => {
     city,
     plan,
     description,
+    billingInfo: {
+      billingCycle,
+      customPrice,
+      paymentMethod,
+      billingEmail,
+      billingAddress,
+      taxId,
+      notes
+    },
     fullBody: req.body
   });
 
@@ -352,6 +376,47 @@ router.post('/create-agency', async (req, res) => {
     const agencyId = crypto.randomUUID();
     let managerId = crypto.randomUUID();
 
+    // Calculate pricing based on plan and billing cycle
+    const calculatePrice = (planType, cycle, customAmount) => {
+      const basePrices = {
+        basic: 49,
+        standard: 99,
+        premium: 199,
+        enterprise: 399,
+        custom: parseFloat(customAmount) || 0
+      };
+
+      const basePrice = basePrices[planType] || basePrices.standard;
+
+      // Apply billing cycle discounts
+      switch (cycle) {
+        case 'quarterly':
+          return Math.round(basePrice * 0.95 * 100) / 100; // 5% discount
+        case 'yearly':
+          return Math.round(basePrice * 0.90 * 100) / 100; // 10% discount
+        default:
+          return basePrice;
+      }
+    };
+
+    const monthlyPrice = calculatePrice(plan, billingCycle, customPrice);
+
+    // Prepare billing settings
+    const billingSettings = {
+      plan: plan || 'standard',
+      billingCycle: billingCycle || 'monthly',
+      monthlyPrice,
+      customPrice: plan === 'custom' ? parseFloat(customPrice) || 0 : null,
+      paymentMethod: paymentMethod || 'credit_card',
+      billingEmail: billingEmail || managerEmail,
+      billingAddress: billingAddress || '',
+      taxId: taxId || '',
+      notes: notes || '',
+      billingStatus: 'active',
+      nextBillingDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days from now
+      createdAt: new Date().toISOString()
+    };
+
     // Insert agency into database
     const agencyResult = await pool.query(`
       INSERT INTO agencies (
@@ -364,7 +429,7 @@ router.post('/create-agency', async (req, res) => {
       agencyName,
       managerEmail,
       'active',
-      JSON.stringify({ plan: plan || 'standard' }),
+      JSON.stringify(billingSettings),
       description || `${agencyName} - Professional Real Estate Agency`,
       city && city.trim() ? city.trim() : 'Not Specified'
     ]);
