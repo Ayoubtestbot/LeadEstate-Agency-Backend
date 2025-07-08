@@ -416,4 +416,210 @@ router.get('/verify', async (req, res) => {
   }
 });
 
+// ===== OWNER DASHBOARD AUTHENTICATION ENDPOINTS =====
+
+// Owner Login endpoint (for Owner Dashboard)
+router.post('/owner/login',
+  authLimiter,
+  [
+    body('email')
+      .isEmail()
+      .normalizeEmail()
+      .withMessage('Please provide a valid email'),
+    body('password')
+      .isLength({ min: 6 })
+      .withMessage('Password must be at least 6 characters long')
+  ],
+  async (req, res) => {
+    try {
+      // Check validation errors
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Validation failed',
+          errors: errors.array()
+        });
+      }
+
+      const { email, password } = req.body;
+
+      // Get database connection
+      const { pool } = require('../config/database');
+      if (!pool) {
+        logger.error('Database connection not available');
+        return res.status(500).json({
+          success: false,
+          message: 'Database connection error'
+        });
+      }
+
+      // Find owner by email
+      const ownerResult = await pool.query(
+        'SELECT * FROM owners WHERE email = $1 AND status = $2',
+        [email, 'active']
+      );
+
+      if (ownerResult.rows.length === 0) {
+        logger.warn(`Failed owner login attempt for email: ${email}`);
+        return res.status(401).json({
+          success: false,
+          message: 'Invalid email or password'
+        });
+      }
+
+      const owner = ownerResult.rows[0];
+
+      // Verify password
+      const bcrypt = require('bcryptjs');
+      const isValidPassword = await bcrypt.compare(password, owner.password_hash);
+
+      if (!isValidPassword) {
+        logger.warn(`Failed owner login attempt for email: ${email} - invalid password`);
+        return res.status(401).json({
+          success: false,
+          message: 'Invalid email or password'
+        });
+      }
+
+      // Update last login time
+      await pool.query(
+        'UPDATE owners SET last_login_at = NOW() WHERE id = $1',
+        [owner.id]
+      );
+
+      // Generate JWT token for owner
+      const token = jwt.sign(
+        {
+          id: owner.id,
+          email: owner.email,
+          role: owner.role,
+          userType: 'owner'
+        },
+        process.env.JWT_SECRET,
+        { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+      );
+
+      logger.info(`Owner login successful: ${email}`);
+
+      return res.json({
+        success: true,
+        message: 'Login successful',
+        data: {
+          token,
+          user: {
+            id: owner.id,
+            email: owner.email,
+            firstName: owner.first_name,
+            lastName: owner.last_name,
+            role: owner.role,
+            userType: 'owner'
+          }
+        }
+      });
+
+    } catch (error) {
+      logger.error('Owner login error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error'
+      });
+    }
+  }
+);
+
+// Owner Token Verification
+router.get('/owner/verify', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        message: 'Access token required'
+      });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    if (decoded.userType !== 'owner') {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid token type'
+      });
+    }
+
+    // Get database connection
+    const { pool } = require('../config/database');
+    if (!pool) {
+      return res.status(500).json({
+        success: false,
+        message: 'Database connection error'
+      });
+    }
+
+    // Get owner from database
+    const ownerResult = await pool.query(
+      'SELECT * FROM owners WHERE id = $1 AND status = $2',
+      [decoded.id, 'active']
+    );
+
+    if (ownerResult.rows.length === 0) {
+      return res.status(401).json({
+        success: false,
+        message: 'Owner not found or inactive'
+      });
+    }
+
+    const owner = ownerResult.rows[0];
+
+    res.json({
+      success: true,
+      data: {
+        user: {
+          id: owner.id,
+          email: owner.email,
+          firstName: owner.first_name,
+          lastName: owner.last_name,
+          role: owner.role,
+          userType: 'owner'
+        }
+      }
+    });
+
+  } catch (error) {
+    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid or expired token'
+      });
+    }
+
+    logger.error('Owner token verification error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// Owner Logout
+router.post('/owner/logout', async (req, res) => {
+  try {
+    // In a production app, you might want to blacklist the token
+    // For now, we'll just return success
+    res.json({
+      success: true,
+      message: 'Logged out successfully'
+    });
+  } catch (error) {
+    logger.error('Owner logout error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
 module.exports = router;
