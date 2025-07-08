@@ -94,10 +94,17 @@ app.use(express.urlencoded({ extended: true }));
 // Serve uploaded images statically
 app.use('/uploads', express.static('uploads'));
 
-// PostgreSQL connection
+// OPTIMIZED PostgreSQL connection with performance settings
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  // Performance optimizations for faster dashboard loading
+  max: 20,                      // Increased pool size
+  min: 2,                       // Keep minimum connections alive
+  idleTimeoutMillis: 60000,     // 60 seconds idle timeout
+  connectionTimeoutMillis: 10000, // 10 seconds connection timeout
+  acquireTimeoutMillis: 15000,  // 15 seconds to acquire connection
+  createTimeoutMillis: 10000,   // 10 seconds to create new connection
 });
 
 // Twilio client initialization
@@ -385,6 +392,63 @@ app.get('/api/status', (req, res) => {
     environment: process.env.NODE_ENV || 'production',
     storage: 'postgresql-database'
   });
+});
+
+// Database optimization endpoint - creates indexes for better performance
+app.get('/api/optimize-db', async (req, res) => {
+  try {
+    console.log('🚀 Optimizing database for better performance...');
+    const startTime = Date.now();
+
+    // Create indexes for faster queries
+    const indexQueries = [
+      // Leads table indexes
+      'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_leads_created_at ON leads(created_at DESC)',
+      'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_leads_status ON leads(status)',
+      'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_leads_assigned_to ON leads(assigned_to)',
+      'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_leads_source ON leads(source)',
+
+      // Properties table indexes
+      'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_properties_created_at ON properties(created_at DESC)',
+      'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_properties_status ON properties(status)',
+      'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_properties_type ON properties(type)',
+      'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_properties_price ON properties(price)',
+
+      // Team members table indexes
+      'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_team_created_at ON team_members(created_at DESC)',
+      'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_team_role ON team_members(role)',
+      'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_team_status ON team_members(status)',
+    ];
+
+    const results = [];
+    for (const query of indexQueries) {
+      try {
+        await pool.query(query);
+        results.push({ query, status: 'success' });
+        console.log('✅ Index created:', query.split(' ')[5]);
+      } catch (error) {
+        results.push({ query, status: 'error', error: error.message });
+        console.log('⚠️ Index creation failed:', error.message);
+      }
+    }
+
+    const endTime = Date.now();
+    console.log(`✅ Database optimization completed in ${endTime - startTime}ms`);
+
+    res.json({
+      success: true,
+      message: 'Database optimization completed',
+      results,
+      optimizationTime: endTime - startTime
+    });
+  } catch (error) {
+    console.error('❌ Database optimization failed:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Database optimization failed',
+      error: error.message
+    });
+  }
 });
 
 // Database test endpoint
@@ -1530,6 +1594,98 @@ app.put('/api/team/:id', async (req, res) => {
       success: false,
       message: 'Failed to update team member',
       error: process.env.NODE_ENV === 'development' ? error.message : 'Database error'
+    });
+  }
+});
+
+// OPTIMIZED: Single endpoint for all dashboard data
+app.get('/api/dashboard/all-data', async (req, res) => {
+  try {
+    console.log('🚀 Fetching all dashboard data in single query...');
+    const startTime = Date.now();
+
+    // Execute all queries in parallel for maximum performance
+    const [leadsResult, propertiesResult, teamResult] = await Promise.all([
+      pool.query(`
+        SELECT
+          id, first_name, last_name, email, phone, whatsapp, source,
+          budget, notes, status, assigned_to, language, created_at, updated_at
+        FROM leads
+        ORDER BY created_at DESC
+        LIMIT 100
+      `),
+      pool.query(`
+        SELECT
+          id, title, description, price, location, type, status,
+          bedrooms, bathrooms, area, images, created_at, updated_at
+        FROM properties
+        ORDER BY created_at DESC
+        LIMIT 100
+      `),
+      pool.query(`
+        SELECT
+          id, first_name, last_name, email, phone, role, status,
+          joined_at, created_at, updated_at
+        FROM team_members
+        ORDER BY created_at DESC
+        LIMIT 100
+      `)
+    ]);
+
+    // Format leads data
+    const formattedLeads = leadsResult.rows.map(lead => ({
+      ...lead,
+      name: `${lead.first_name} ${lead.last_name}`.trim(),
+      assignedTo: lead.assigned_to,
+      createdAt: lead.created_at,
+      updatedAt: lead.updated_at
+    }));
+
+    // Format properties data
+    const formattedProperties = propertiesResult.rows.map(property => ({
+      ...property,
+      createdAt: property.created_at,
+      updatedAt: property.updated_at,
+      images: property.images || []
+    }));
+
+    // Format team data
+    const formattedTeam = teamResult.rows.map(member => ({
+      ...member,
+      name: `${member.first_name} ${member.last_name}`.trim(),
+      createdAt: member.created_at,
+      updatedAt: member.updated_at,
+      joinedAt: member.joined_at,
+      joinDate: member.joined_at
+    }));
+
+    const endTime = Date.now();
+    console.log(`✅ All dashboard data fetched in ${endTime - startTime}ms`);
+    console.log(`📊 Data counts: ${formattedLeads.length} leads, ${formattedProperties.length} properties, ${formattedTeam.length} team members`);
+
+    res.json({
+      success: true,
+      data: {
+        leads: formattedLeads,
+        properties: formattedProperties,
+        team: formattedTeam
+      },
+      count: {
+        leads: formattedLeads.length,
+        properties: formattedProperties.length,
+        team: formattedTeam.length
+      },
+      performance: {
+        queryTime: endTime - startTime,
+        optimized: true
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error fetching all dashboard data:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch dashboard data',
+      error: error.message
     });
   }
 });
