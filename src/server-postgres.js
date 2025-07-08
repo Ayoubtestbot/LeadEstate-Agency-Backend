@@ -1749,6 +1749,10 @@ app.use('/api/audit', auditRoutes);
 const advancedAnalyticsRoutes = require('./routes/advanced-analytics');
 app.use('/api/advanced-analytics', advancedAnalyticsRoutes);
 
+// Authentication routes (for both agency users and owner dashboard)
+const authRoutes = require('./routes/auth');
+app.use('/api/auth', authRoutes);
+
 // Owner dashboard integration routes
 const ownerIntegrationRoutes = require('./routes/owner-integration');
 app.use('/api/owner-integration', ownerIntegrationRoutes);
