@@ -19,9 +19,15 @@ const createPool = () => {
           require: true,
           rejectUnauthorized: false
         } : false,
-        max: 10,
-        idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 2000,
+        // OPTIMIZED: Increased pool size and timeouts for better performance
+        max: 20,                      // Increased from 10 to 20
+        min: 2,                       // Keep minimum connections alive
+        idleTimeoutMillis: 60000,     // Increased from 30s to 60s
+        connectionTimeoutMillis: 10000, // Increased from 2s to 10s
+        acquireTimeoutMillis: 15000,  // Added: Time to wait for connection from pool
+        createTimeoutMillis: 10000,   // Added: Time to wait for new connection creation
+        reapIntervalMillis: 1000,     // Added: How often to check for idle connections
+        createRetryIntervalMillis: 200, // Added: Retry interval for failed connections
       });
     } else {
       // Use individual environment variables
@@ -36,9 +42,15 @@ const createPool = () => {
           require: true,
           rejectUnauthorized: false
         } : false,
-        max: 10,
-        idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 2000,
+        // OPTIMIZED: Same performance settings for individual variables
+        max: 20,                      // Increased from 10 to 20
+        min: 2,                       // Keep minimum connections alive
+        idleTimeoutMillis: 60000,     // Increased from 30s to 60s
+        connectionTimeoutMillis: 10000, // Increased from 2s to 10s
+        acquireTimeoutMillis: 15000,  // Added: Time to wait for connection from pool
+        createTimeoutMillis: 10000,   // Added: Time to wait for new connection creation
+        reapIntervalMillis: 1000,     // Added: How often to check for idle connections
+        createRetryIntervalMillis: 200, // Added: Retry interval for failed connections
       });
     }
 
