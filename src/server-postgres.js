@@ -451,6 +451,65 @@ app.get('/api/optimize-db', async (req, res) => {
   }
 });
 
+// Database initialization endpoint for owners table
+app.get('/api/init-owners', async (req, res) => {
+  try {
+    console.log('🔧 Initializing owners table...');
+
+    // Create owners table if it doesn't exist
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS owners (
+        id SERIAL PRIMARY KEY,
+        first_name VARCHAR(100) NOT NULL,
+        last_name VARCHAR(100) NOT NULL,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password_hash VARCHAR(255) NOT NULL,
+        role VARCHAR(50) DEFAULT 'owner',
+        status VARCHAR(20) DEFAULT 'active',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        last_login_at TIMESTAMP
+      )
+    `);
+
+    // Check if default owner exists
+    const existingOwner = await pool.query('SELECT * FROM owners WHERE email = $1', ['admin@leadestate.com']);
+
+    if (existingOwner.rows.length === 0) {
+      // Create default owner account
+      const bcrypt = require('bcryptjs');
+      const hashedPassword = await bcrypt.hash('admin123', 10);
+
+      await pool.query(`
+        INSERT INTO owners (first_name, last_name, email, password_hash, role, status)
+        VALUES ($1, $2, $3, $4, $5, $6)
+      `, ['Admin', 'User', 'admin@leadestate.com', hashedPassword, 'owner', 'active']);
+
+      console.log('✅ Default owner account created');
+    } else {
+      console.log('✅ Default owner account already exists');
+    }
+
+    res.json({
+      success: true,
+      message: 'Owners table initialized successfully',
+      defaultAccount: {
+        email: 'admin@leadestate.com',
+        password: 'admin123',
+        note: 'Default owner account for testing'
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error initializing owners table:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to initialize owners table',
+      error: error.message
+    });
+  }
+});
+
 // Database test endpoint
 app.get('/api/test-db', async (req, res) => {
   try {
