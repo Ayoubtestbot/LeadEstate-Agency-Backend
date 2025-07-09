@@ -1749,6 +1749,165 @@ app.get('/api/dashboard/all-data', async (req, res) => {
   }
 });
 
+// WhatsApp diagnostic endpoint
+app.get('/api/whatsapp/diagnostic', async (req, res) => {
+  try {
+    console.log('🔍 Running WhatsApp diagnostic...');
+
+    const diagnostic = {
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV || 'production',
+      configuration: {},
+      twilioStatus: {},
+      recentActivity: {},
+      recommendations: []
+    };
+
+    // Check environment variables
+    const requiredVars = ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_WHATSAPP_FROM'];
+    requiredVars.forEach(varName => {
+      const value = process.env[varName];
+      diagnostic.configuration[varName] = {
+        configured: !!value,
+        value: value ? (varName.includes('TOKEN') ?
+          value.substring(0, 8) + '...' + value.substring(value.length - 4) :
+          value) : null
+      };
+    });
+
+    // Test Twilio connection if configured
+    if (twilioClient) {
+      try {
+        const account = await twilioClient.api.accounts(process.env.TWILIO_ACCOUNT_SID).fetch();
+        diagnostic.twilioStatus = {
+          connected: true,
+          accountStatus: account.status,
+          accountName: account.friendlyName,
+          accountType: account.type
+        };
+
+        // Check recent messages
+        const recentMessages = await twilioClient.messages.list({
+          from: `whatsapp:${process.env.TWILIO_WHATSAPP_FROM}`,
+          limit: 5
+        });
+
+        diagnostic.recentActivity = {
+          messageCount: recentMessages.length,
+          messages: recentMessages.map(msg => ({
+            to: msg.to,
+            status: msg.status,
+            dateCreated: msg.dateCreated,
+            errorCode: msg.errorCode,
+            errorMessage: msg.errorMessage
+          }))
+        };
+
+      } catch (error) {
+        diagnostic.twilioStatus = {
+          connected: false,
+          error: error.message,
+          code: error.code
+        };
+      }
+    } else {
+      diagnostic.twilioStatus = {
+        connected: false,
+        reason: 'Twilio client not initialized - check credentials'
+      };
+    }
+
+    // Generate recommendations
+    if (!diagnostic.configuration.TWILIO_ACCOUNT_SID.configured) {
+      diagnostic.recommendations.push('Set TWILIO_ACCOUNT_SID environment variable');
+    }
+    if (!diagnostic.configuration.TWILIO_AUTH_TOKEN.configured) {
+      diagnostic.recommendations.push('Set TWILIO_AUTH_TOKEN environment variable');
+    }
+    if (!diagnostic.configuration.TWILIO_WHATSAPP_FROM.configured) {
+      diagnostic.recommendations.push('Set TWILIO_WHATSAPP_FROM environment variable (e.g., +14155238886 for sandbox)');
+    }
+    if (!diagnostic.twilioStatus.connected) {
+      diagnostic.recommendations.push('Verify Twilio credentials are correct');
+    }
+    if (diagnostic.configuration.TWILIO_WHATSAPP_FROM.value === '+14155238886') {
+      diagnostic.recommendations.push('Using WhatsApp sandbox - make sure recipients join sandbox first');
+    }
+    if (diagnostic.recentActivity.messageCount === 0) {
+      diagnostic.recommendations.push('No recent WhatsApp messages found - test by creating a new lead');
+    }
+
+    res.json({
+      success: true,
+      diagnostic
+    });
+
+  } catch (error) {
+    console.error('❌ WhatsApp diagnostic failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      diagnostic: {
+        timestamp: new Date().toISOString(),
+        error: 'Diagnostic failed to complete'
+      }
+    });
+  }
+});
+
+// WhatsApp test message endpoint
+app.post('/api/whatsapp/test', async (req, res) => {
+  try {
+    const { phoneNumber, message } = req.body;
+
+    if (!phoneNumber) {
+      return res.status(400).json({
+        success: false,
+        error: 'Phone number is required'
+      });
+    }
+
+    if (!twilioClient) {
+      return res.status(400).json({
+        success: false,
+        error: 'Twilio not configured'
+      });
+    }
+
+    const testMessage = message || `🧪 Test WhatsApp message from LeadEstate
+
+Time: ${new Date().toLocaleString()}
+Status: Testing WhatsApp integration
+
+If you receive this message, WhatsApp notifications are working! ✅`;
+
+    const twilioMessage = await twilioClient.messages.create({
+      from: `whatsapp:${process.env.TWILIO_WHATSAPP_FROM}`,
+      to: `whatsapp:${phoneNumber}`,
+      body: testMessage
+    });
+
+    console.log('✅ Test WhatsApp message sent successfully!');
+
+    res.json({
+      success: true,
+      messageSid: twilioMessage.sid,
+      status: twilioMessage.status,
+      to: phoneNumber,
+      message: 'Test message sent successfully'
+    });
+
+  } catch (error) {
+    console.error('❌ Test WhatsApp message failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      code: error.code,
+      details: error.moreInfo || 'Check Twilio console for more details'
+    });
+  }
+});
+
 // Dashboard stats endpoint
 app.get('/api/dashboard/stats', async (req, res) => {
   try {
