@@ -336,7 +336,7 @@ ${agent.name}
 
         return {
           success: true,
-          method: 'twilio',
+          method: 'twilio_whatsapp',
           messageSid: twilioMessage.sid,
           status: twilioMessage.status,
           agent: agent.name,
@@ -346,6 +346,56 @@ ${agent.name}
 
       } catch (twilioError) {
         console.error('❌ Twilio WhatsApp send failed:', twilioError.message);
+        console.log('📊 Error code:', twilioError.code);
+
+        // Try SMS fallback if WhatsApp fails due to sandbox restriction
+        if (process.env.TWILIO_PHONE_NUMBER && twilioError.code === 63015) {
+          try {
+            console.log('📱 Trying SMS fallback due to WhatsApp sandbox restriction...');
+
+            const smsMessage = `🏠 Bienvenue chez LeadEstate !
+
+Bonjour ${lead.name} !
+
+Merci de votre intérêt pour nos services immobiliers.
+Je suis ${agent.name}, votre conseiller dédié.
+
+👤 Votre conseiller : ${agent.name}
+📱 Mon numéro : ${agent.phone || 'À venir'}
+📧 Mon email : ${agent.email || 'À venir'}
+
+Je suis là pour vous accompagner dans votre projet immobilier.
+N'hésitez pas à me contacter pour toute question !
+
+À très bientôt,
+${agent.name}
+LeadEstate - Votre partenaire immobilier 🏡`;
+
+            const smsResult = await twilioClient.messages.create({
+              from: process.env.TWILIO_PHONE_NUMBER,
+              to: phoneNumber,
+              body: smsMessage
+            });
+
+            console.log('✅ SMS fallback sent successfully!');
+            console.log('📧 SMS SID:', smsResult.sid);
+
+            return {
+              success: true,
+              method: 'sms_fallback',
+              messageSid: smsResult.sid,
+              status: smsResult.status,
+              agent: agent.name,
+              leadName: lead.name,
+              phoneNumber: phoneNumber,
+              note: 'Sent via SMS due to WhatsApp sandbox restriction'
+            };
+
+          } catch (smsError) {
+            console.error('❌ SMS fallback also failed:', smsError);
+            // Continue to URL fallback below
+          }
+        }
 
         // Fallback to URL method
         const whatsappUrl = `https://wa.me/${phoneNumber.replace('+', '')}?text=${encodeURIComponent(message)}`;
