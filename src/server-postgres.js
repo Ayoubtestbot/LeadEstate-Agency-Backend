@@ -1123,6 +1123,56 @@ app.post('/api/leads/replace-all', async (req, res) => {
   }
 });
 
+// Fix lead assignments to use actual team members
+app.post('/api/leads/fix-assignments', async (req, res) => {
+  try {
+    console.log('🔄 Fixing lead assignments to use actual team members...');
+
+    const { actualTeamMembers, fakeTeamMembers } = req.body;
+
+    if (!actualTeamMembers || !Array.isArray(actualTeamMembers)) {
+      return res.status(400).json({
+        success: false,
+        message: 'actualTeamMembers array is required'
+      });
+    }
+
+    // Get all leads that need assignment updates
+    const leadsResult = await pool.query('SELECT id, assigned_to FROM leads WHERE assigned_to IS NOT NULL');
+
+    let updatedCount = 0;
+
+    for (const lead of leadsResult.rows) {
+      // Randomly assign to one of the actual team members
+      const randomIndex = Math.floor(Math.random() * actualTeamMembers.length);
+      const newAssignee = actualTeamMembers[randomIndex];
+
+      // Update the lead assignment
+      await pool.query(
+        'UPDATE leads SET assigned_to = $1, updated_at = $2 WHERE id = $3',
+        [newAssignee, new Date().toISOString(), lead.id]
+      );
+
+      updatedCount++;
+    }
+
+    console.log(`✅ Updated ${updatedCount} lead assignments`);
+
+    res.json({
+      success: true,
+      message: `Successfully updated lead assignments to use your actual team members`,
+      updatedCount,
+      teamMembers: actualTeamMembers
+    });
+  } catch (error) {
+    console.error('Error fixing lead assignments:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fix lead assignments'
+    });
+  }
+});
+
 // Leads endpoints
 app.get('/api/leads', async (req, res) => {
   try {
