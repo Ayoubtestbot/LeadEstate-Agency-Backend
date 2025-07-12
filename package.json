@@ -9,6 +9,7 @@
     "dev": "node src/server-memory.js",
     "migrate": "node src/database/migrate.js",
     "seed": "node src/database/seed.js",
+    "replace-leads": "node scripts/replace-leads.js",
     "test": "jest"
   },
   "dependencies": {
