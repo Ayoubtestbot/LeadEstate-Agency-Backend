@@ -1022,57 +1022,60 @@ app.post('/api/leads/replace-all', async (req, res) => {
       'Ayoub jada'
     ];
 
+    // Different statuses for realistic pipeline
+    const statuses = ['new', 'contacted', 'qualified', 'proposal', 'negotiation', 'closed-won', 'closed-lost'];
+
     const sampleLeads = [
-      { name: 'Ahmed Hassan', phone: '+212600123456', city: 'Casablanca', email: 'ahmed.hassan@email.com', source: 'website', budget: '500000' },
-      { name: 'Fatima Zahra', phone: '+212601234567', city: 'Rabat', email: 'fatima.zahra@email.com', source: 'facebook', budget: '750000' },
-      { name: 'Youssef Alami', phone: '+212602345678', city: 'Marrakech', email: 'youssef.alami@email.com', source: 'google', budget: '300000' },
-      { name: 'Aicha Benali', phone: '+212603456789', city: 'Fes', email: 'aicha.benali@email.com', source: 'referral', budget: '600000' },
-      { name: 'Omar Idrissi', phone: '+212604567890', city: 'Tangier', email: 'omar.idrissi@email.com', source: 'walk-in', budget: '450000' },
-      { name: 'Khadija Mansouri', phone: '+212605678901', city: 'Agadir', email: 'khadija.mansouri@email.com', source: 'website', budget: '800000' },
-      { name: 'Rachid Tazi', phone: '+212606789012', city: 'Meknes', email: 'rachid.tazi@email.com', source: 'facebook', budget: '350000' },
-      { name: 'Laila Chraibi', phone: '+212607890123', city: 'Oujda', email: 'laila.chraibi@email.com', source: 'google', budget: '700000' },
-      { name: 'Karim Benjelloun', phone: '+212608901234', city: 'Kenitra', email: 'karim.benjelloun@email.com', source: 'referral', budget: '400000' },
-      { name: 'Nadia Fassi', phone: '+212609012345', city: 'Tetouan', email: 'nadia.fassi@email.com', source: 'walk-in', budget: '550000' },
-      { name: 'Hassan Berrada', phone: '+212610123456', city: 'Casablanca', email: 'hassan.berrada@email.com', source: 'website', budget: '900000' },
-      { name: 'Samira Ouali', phone: '+212611234567', city: 'Rabat', email: 'samira.ouali@email.com', source: 'facebook', budget: '320000' },
-      { name: 'Abdelkader Ziani', phone: '+212612345678', city: 'Marrakech', email: 'abdelkader.ziani@email.com', source: 'google', budget: '650000' },
-      { name: 'Zineb Amrani', phone: '+212613456789', city: 'Fes', email: 'zineb.amrani@email.com', source: 'referral', budget: '480000' },
-      { name: 'Mustapha Kadiri', phone: '+212614567890', city: 'Tangier', email: 'mustapha.kadiri@email.com', source: 'walk-in', budget: '720000' },
-      { name: 'Houda Benkirane', phone: '+212615678901', city: 'Agadir', email: 'houda.benkirane@email.com', source: 'website', budget: '380000' },
-      { name: 'Said Lamrani', phone: '+212616789012', city: 'Meknes', email: 'said.lamrani@email.com', source: 'facebook', budget: '850000' },
-      { name: 'Malika Senhaji', phone: '+212617890123', city: 'Oujda', email: 'malika.senhaji@email.com', source: 'google', budget: '420000' },
-      { name: 'Driss Alaoui', phone: '+212618901234', city: 'Kenitra', email: 'driss.alaoui@email.com', source: 'referral', budget: '680000' },
-      { name: 'Rajae Bennani', phone: '+212619012345', city: 'Tetouan', email: 'rajae.bennani@email.com', source: 'walk-in', budget: '520000' },
-      { name: 'Khalid Squalli', phone: '+212620123456', city: 'Casablanca', email: 'khalid.squalli@email.com', source: 'website', budget: '760000' },
-      { name: 'Amina Kettani', phone: '+212621234567', city: 'Rabat', email: 'amina.kettani@email.com', source: 'facebook', budget: '340000' },
-      { name: 'Brahim Filali', phone: '+212622345678', city: 'Marrakech', email: 'brahim.filali@email.com', source: 'google', budget: '590000' },
-      { name: 'Leila Hajji', phone: '+212623456789', city: 'Fes', email: 'leila.hajji@email.com', source: 'referral', budget: '440000' },
-      { name: 'Tarik Bensouda', phone: '+212624567890', city: 'Tangier', email: 'tarik.bensouda@email.com', source: 'walk-in', budget: '810000' },
-      { name: 'Souad Cherkaoui', phone: '+212625678901', city: 'Agadir', email: 'souad.cherkaoui@email.com', source: 'website', budget: '360000' },
-      { name: 'Abderrahim Naciri', phone: '+212626789012', city: 'Meknes', email: 'abderrahim.naciri@email.com', source: 'facebook', budget: '700000' },
-      { name: 'Karima Benali', phone: '+212627890123', city: 'Oujda', email: 'karima.benali@email.com', source: 'google', budget: '460000' },
-      { name: 'Youssef Berrada', phone: '+212628901234', city: 'Kenitra', email: 'youssef.berrada@email.com', source: 'referral', budget: '630000' },
-      { name: 'Nawal Tounsi', phone: '+212629012345', city: 'Tetouan', email: 'nawal.tounsi@email.com', source: 'walk-in', budget: '580000' },
-      { name: 'Hamid Lahlou', phone: '+212630123456', city: 'Casablanca', email: 'hamid.lahlou@email.com', source: 'website', budget: '920000' },
-      { name: 'Siham Benkirane', phone: '+212631234567', city: 'Rabat', email: 'siham.benkirane@email.com', source: 'facebook', budget: '310000' },
-      { name: 'Mostafa Alami', phone: '+212632345678', city: 'Marrakech', email: 'mostafa.alami@email.com', source: 'google', budget: '670000' },
-      { name: 'Widad Fassi', phone: '+212633456789', city: 'Fes', email: 'widad.fassi@email.com', source: 'referral', budget: '490000' },
-      { name: 'Aziz Benjelloun', phone: '+212634567890', city: 'Tangier', email: 'aziz.benjelloun@email.com', source: 'walk-in', budget: '750000' },
-      { name: 'Latifa Chraibi', phone: '+212635678901', city: 'Agadir', email: 'latifa.chraibi@email.com', source: 'website', budget: '390000' },
-      { name: 'Redouane Idrissi', phone: '+212636789012', city: 'Meknes', email: 'redouane.idrissi@email.com', source: 'facebook', budget: '820000' },
-      { name: 'Hayat Mansouri', phone: '+212637890123', city: 'Oujda', email: 'hayat.mansouri@email.com', source: 'google', budget: '430000' },
-      { name: 'Jamal Tazi', phone: '+212638901234', city: 'Kenitra', email: 'jamal.tazi@email.com', source: 'referral', budget: '690000' },
-      { name: 'Ghita Ouali', phone: '+212639012345', city: 'Tetouan', email: 'ghita.ouali@email.com', source: 'walk-in', budget: '540000' },
-      { name: 'Noureddine Ziani', phone: '+212640123456', city: 'Casablanca', email: 'noureddine.ziani@email.com', source: 'website', budget: '780000' },
-      { name: 'Btissam Amrani', phone: '+212641234567', city: 'Rabat', email: 'btissam.amrani@email.com', source: 'facebook', budget: '350000' },
-      { name: 'Lahcen Kadiri', phone: '+212642345678', city: 'Marrakech', email: 'lahcen.kadiri@email.com', source: 'google', budget: '610000' },
-      { name: 'Nezha Benkirane', phone: '+212643456789', city: 'Fes', email: 'nezha.benkirane@email.com', source: 'referral', budget: '470000' },
-      { name: 'Abdellatif Lamrani', phone: '+212644567890', city: 'Tangier', email: 'abdellatif.lamrani@email.com', source: 'walk-in', budget: '840000' },
-      { name: 'Samia Senhaji', phone: '+212645678901', city: 'Agadir', email: 'samia.senhaji@email.com', source: 'website', budget: '410000' },
-      { name: 'Fouad Alaoui', phone: '+212646789012', city: 'Meknes', email: 'fouad.alaoui@email.com', source: 'facebook', budget: '730000' },
-      { name: 'Ilham Bennani', phone: '+212647890123', city: 'Oujda', email: 'ilham.bennani@email.com', source: 'google', budget: '500000' },
-      { name: 'Abdessamad Squalli', phone: '+212648901234', city: 'Kenitra', email: 'abdessamad.squalli@email.com', source: 'referral', budget: '660000' },
-      { name: 'Rim Kettani', phone: '+212649012345', city: 'Tetouan', email: 'rim.kettani@email.com', source: 'walk-in', budget: '570000' }
+      { name: 'Ahmed Hassan', phone: '+212600123456', city: 'Casablanca', email: 'ahmed.hassan@email.com', source: 'website', budget: '500000', status: 'new' },
+      { name: 'Fatima Zahra', phone: '+212601234567', city: 'Rabat', email: 'fatima.zahra@email.com', source: 'facebook', budget: '750000', status: 'contacted' },
+      { name: 'Youssef Alami', phone: '+212602345678', city: 'Marrakech', email: 'youssef.alami@email.com', source: 'google', budget: '300000', status: 'new' },
+      { name: 'Aicha Benali', phone: '+212603456789', city: 'Fes', email: 'aicha.benali@email.com', source: 'referral', budget: '600000', status: 'qualified' },
+      { name: 'Omar Idrissi', phone: '+212604567890', city: 'Tangier', email: 'omar.idrissi@email.com', source: 'walk-in', budget: '450000', status: 'contacted' },
+      { name: 'Khadija Mansouri', phone: '+212605678901', city: 'Agadir', email: 'khadija.mansouri@email.com', source: 'website', budget: '800000', status: 'proposal' },
+      { name: 'Rachid Tazi', phone: '+212606789012', city: 'Meknes', email: 'rachid.tazi@email.com', source: 'facebook', budget: '350000', status: 'new' },
+      { name: 'Laila Chraibi', phone: '+212607890123', city: 'Oujda', email: 'laila.chraibi@email.com', source: 'google', budget: '700000', status: 'qualified' },
+      { name: 'Karim Benjelloun', phone: '+212608901234', city: 'Kenitra', email: 'karim.benjelloun@email.com', source: 'referral', budget: '400000', status: 'contacted' },
+      { name: 'Nadia Fassi', phone: '+212609012345', city: 'Tetouan', email: 'nadia.fassi@email.com', source: 'walk-in', budget: '550000', status: 'negotiation' },
+      { name: 'Hassan Berrada', phone: '+212610123456', city: 'Casablanca', email: 'hassan.berrada@email.com', source: 'website', budget: '900000', status: 'closed-won' },
+      { name: 'Samira Ouali', phone: '+212611234567', city: 'Rabat', email: 'samira.ouali@email.com', source: 'facebook', budget: '320000', status: 'new' },
+      { name: 'Abdelkader Ziani', phone: '+212612345678', city: 'Marrakech', email: 'abdelkader.ziani@email.com', source: 'google', budget: '650000', status: 'qualified' },
+      { name: 'Zineb Amrani', phone: '+212613456789', city: 'Fes', email: 'zineb.amrani@email.com', source: 'referral', budget: '480000', status: 'contacted' },
+      { name: 'Mustapha Kadiri', phone: '+212614567890', city: 'Tangier', email: 'mustapha.kadiri@email.com', source: 'walk-in', budget: '720000', status: 'proposal' },
+      { name: 'Houda Benkirane', phone: '+212615678901', city: 'Agadir', email: 'houda.benkirane@email.com', source: 'website', budget: '380000', status: 'new' },
+      { name: 'Said Lamrani', phone: '+212616789012', city: 'Meknes', email: 'said.lamrani@email.com', source: 'facebook', budget: '850000', status: 'negotiation' },
+      { name: 'Malika Senhaji', phone: '+212617890123', city: 'Oujda', email: 'malika.senhaji@email.com', source: 'google', budget: '420000', status: 'contacted' },
+      { name: 'Driss Alaoui', phone: '+212618901234', city: 'Kenitra', email: 'driss.alaoui@email.com', source: 'referral', budget: '680000', status: 'qualified' },
+      { name: 'Rajae Bennani', phone: '+212619012345', city: 'Tetouan', email: 'rajae.bennani@email.com', source: 'walk-in', budget: '520000', status: 'closed-lost' },
+      { name: 'Khalid Squalli', phone: '+212620123456', city: 'Casablanca', email: 'khalid.squalli@email.com', source: 'website', budget: '760000', status: 'new' },
+      { name: 'Amina Kettani', phone: '+212621234567', city: 'Rabat', email: 'amina.kettani@email.com', source: 'facebook', budget: '340000', status: 'contacted' },
+      { name: 'Brahim Filali', phone: '+212622345678', city: 'Marrakech', email: 'brahim.filali@email.com', source: 'google', budget: '590000', status: 'qualified' },
+      { name: 'Leila Hajji', phone: '+212623456789', city: 'Fes', email: 'leila.hajji@email.com', source: 'referral', budget: '440000', status: 'proposal' },
+      { name: 'Tarik Bensouda', phone: '+212624567890', city: 'Tangier', email: 'tarik.bensouda@email.com', source: 'walk-in', budget: '810000', status: 'closed-won' },
+      { name: 'Souad Cherkaoui', phone: '+212625678901', city: 'Agadir', email: 'souad.cherkaoui@email.com', source: 'website', budget: '360000', status: 'new' },
+      { name: 'Abderrahim Naciri', phone: '+212626789012', city: 'Meknes', email: 'abderrahim.naciri@email.com', source: 'facebook', budget: '700000', status: 'negotiation' },
+      { name: 'Karima Benali', phone: '+212627890123', city: 'Oujda', email: 'karima.benali@email.com', source: 'google', budget: '460000', status: 'contacted' },
+      { name: 'Youssef Berrada', phone: '+212628901234', city: 'Kenitra', email: 'youssef.berrada@email.com', source: 'referral', budget: '630000', status: 'qualified' },
+      { name: 'Nawal Tounsi', phone: '+212629012345', city: 'Tetouan', email: 'nawal.tounsi@email.com', source: 'walk-in', budget: '580000', status: 'proposal' },
+      { name: 'Hamid Lahlou', phone: '+212630123456', city: 'Casablanca', email: 'hamid.lahlou@email.com', source: 'website', budget: '920000', status: 'closed-won' },
+      { name: 'Siham Benkirane', phone: '+212631234567', city: 'Rabat', email: 'siham.benkirane@email.com', source: 'facebook', budget: '310000', status: 'new' },
+      { name: 'Mostafa Alami', phone: '+212632345678', city: 'Marrakech', email: 'mostafa.alami@email.com', source: 'google', budget: '670000', status: 'contacted' },
+      { name: 'Widad Fassi', phone: '+212633456789', city: 'Fes', email: 'widad.fassi@email.com', source: 'referral', budget: '490000', status: 'qualified' },
+      { name: 'Aziz Benjelloun', phone: '+212634567890', city: 'Tangier', email: 'aziz.benjelloun@email.com', source: 'walk-in', budget: '750000', status: 'negotiation' },
+      { name: 'Latifa Chraibi', phone: '+212635678901', city: 'Agadir', email: 'latifa.chraibi@email.com', source: 'website', budget: '390000', status: 'new' },
+      { name: 'Redouane Idrissi', phone: '+212636789012', city: 'Meknes', email: 'redouane.idrissi@email.com', source: 'facebook', budget: '820000', status: 'proposal' },
+      { name: 'Hayat Mansouri', phone: '+212637890123', city: 'Oujda', email: 'hayat.mansouri@email.com', source: 'google', budget: '430000', status: 'contacted' },
+      { name: 'Jamal Tazi', phone: '+212638901234', city: 'Kenitra', email: 'jamal.tazi@email.com', source: 'referral', budget: '690000', status: 'qualified' },
+      { name: 'Ghita Ouali', phone: '+212639012345', city: 'Tetouan', email: 'ghita.ouali@email.com', source: 'walk-in', budget: '540000', status: 'closed-lost' },
+      { name: 'Noureddine Ziani', phone: '+212640123456', city: 'Casablanca', email: 'noureddine.ziani@email.com', source: 'website', budget: '780000', status: 'negotiation' },
+      { name: 'Btissam Amrani', phone: '+212641234567', city: 'Rabat', email: 'btissam.amrani@email.com', source: 'facebook', budget: '350000', status: 'new' },
+      { name: 'Lahcen Kadiri', phone: '+212642345678', city: 'Marrakech', email: 'lahcen.kadiri@email.com', source: 'google', budget: '610000', status: 'contacted' },
+      { name: 'Nezha Benkirane', phone: '+212643456789', city: 'Fes', email: 'nezha.benkirane@email.com', source: 'referral', budget: '470000', status: 'qualified' },
+      { name: 'Abdellatif Lamrani', phone: '+212644567890', city: 'Tangier', email: 'abdellatif.lamrani@email.com', source: 'walk-in', budget: '840000', status: 'closed-won' },
+      { name: 'Samia Senhaji', phone: '+212645678901', city: 'Agadir', email: 'samia.senhaji@email.com', source: 'website', budget: '410000', status: 'proposal' },
+      { name: 'Fouad Alaoui', phone: '+212646789012', city: 'Meknes', email: 'fouad.alaoui@email.com', source: 'facebook', budget: '730000', status: 'negotiation' },
+      { name: 'Ilham Bennani', phone: '+212647890123', city: 'Oujda', email: 'ilham.bennani@email.com', source: 'google', budget: '500000', status: 'new' },
+      { name: 'Abdessamad Squalli', phone: '+212648901234', city: 'Kenitra', email: 'abdessamad.squalli@email.com', source: 'referral', budget: '660000', status: 'contacted' },
+      { name: 'Rim Kettani', phone: '+212649012345', city: 'Tetouan', email: 'rim.kettani@email.com', source: 'walk-in', budget: '570000', status: 'qualified' }
     ];
 
     let createdCount = 0;
@@ -1097,7 +1100,7 @@ app.post('/api/leads/replace-all', async (req, res) => {
           source: leadData.source,
           budget: leadData.budget ? parseFloat(leadData.budget) : null,
           notes: `Sample lead from ${leadData.city}`,
-          status: 'new',
+          status: leadData.status,
           assigned_to: assignedAgent,
           language: 'fr',
           agency_id: 'default-agency',
@@ -1183,6 +1186,138 @@ app.post('/api/leads/fix-assignments', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fix lead assignments'
+    });
+  }
+});
+
+// Add 50 additional leads with different statuses (without deleting existing ones)
+app.post('/api/leads/add-samples', async (req, res) => {
+  try {
+    console.log('📝 Adding 50 additional sample leads with different statuses...');
+
+    // Your actual team members
+    const actualTeamMembers = [
+      'Émilie Rousseau',
+      'Julien Martin',
+      'Camille Laurent',
+      'Antoine Dubois',
+      'Sophie Moreau',
+      'Ayoub jada'
+    ];
+
+    // Different statuses for realistic pipeline
+    const statuses = ['new', 'contacted', 'qualified', 'proposal', 'negotiation', 'closed-won', 'closed-lost'];
+
+    const additionalLeads = [
+      { name: 'Mehdi Alaoui', phone: '+212650123456', city: 'Casablanca', email: 'mehdi.alaoui@email.com', source: 'website', budget: '520000', status: 'new' },
+      { name: 'Salma Benkirane', phone: '+212651234567', city: 'Rabat', email: 'salma.benkirane@email.com', source: 'facebook', budget: '780000', status: 'contacted' },
+      { name: 'Amine Tazi', phone: '+212652345678', city: 'Marrakech', email: 'amine.tazi@email.com', source: 'google', budget: '320000', status: 'new' },
+      { name: 'Hanane Chraibi', phone: '+212653456789', city: 'Fes', email: 'hanane.chraibi@email.com', source: 'referral', budget: '620000', status: 'qualified' },
+      { name: 'Khalil Idrissi', phone: '+212654567890', city: 'Tangier', email: 'khalil.idrissi@email.com', source: 'walk-in', budget: '470000', status: 'contacted' },
+      { name: 'Imane Mansouri', phone: '+212655678901', city: 'Agadir', email: 'imane.mansouri@email.com', source: 'website', budget: '820000', status: 'proposal' },
+      { name: 'Saad Tazi', phone: '+212656789012', city: 'Meknes', email: 'saad.tazi@email.com', source: 'facebook', budget: '370000', status: 'new' },
+      { name: 'Meriem Chraibi', phone: '+212657890123', city: 'Oujda', email: 'meriem.chraibi@email.com', source: 'google', budget: '720000', status: 'qualified' },
+      { name: 'Yassine Benjelloun', phone: '+212658901234', city: 'Kenitra', email: 'yassine.benjelloun@email.com', source: 'referral', budget: '420000', status: 'contacted' },
+      { name: 'Dounia Fassi', phone: '+212659012345', city: 'Tetouan', email: 'dounia.fassi@email.com', source: 'walk-in', budget: '570000', status: 'negotiation' },
+      { name: 'Ismail Berrada', phone: '+212660123456', city: 'Casablanca', email: 'ismail.berrada@email.com', source: 'website', budget: '920000', status: 'closed-won' },
+      { name: 'Asmae Ouali', phone: '+212661234567', city: 'Rabat', email: 'asmae.ouali@email.com', source: 'facebook', budget: '340000', status: 'new' },
+      { name: 'Hamza Ziani', phone: '+212662345678', city: 'Marrakech', email: 'hamza.ziani@email.com', source: 'google', budget: '670000', status: 'qualified' },
+      { name: 'Loubna Amrani', phone: '+212663456789', city: 'Fes', email: 'loubna.amrani@email.com', source: 'referral', budget: '500000', status: 'contacted' },
+      { name: 'Othmane Kadiri', phone: '+212664567890', city: 'Tangier', email: 'othmane.kadiri@email.com', source: 'walk-in', budget: '740000', status: 'proposal' },
+      { name: 'Safae Benkirane', phone: '+212665678901', city: 'Agadir', email: 'safae.benkirane@email.com', source: 'website', budget: '400000', status: 'new' },
+      { name: 'Adil Lamrani', phone: '+212666789012', city: 'Meknes', email: 'adil.lamrani@email.com', source: 'facebook', budget: '870000', status: 'negotiation' },
+      { name: 'Jihane Senhaji', phone: '+212667890123', city: 'Oujda', email: 'jihane.senhaji@email.com', source: 'google', budget: '440000', status: 'contacted' },
+      { name: 'Badr Alaoui', phone: '+212668901234', city: 'Kenitra', email: 'badr.alaoui@email.com', source: 'referral', budget: '700000', status: 'qualified' },
+      { name: 'Soukaina Bennani', phone: '+212669012345', city: 'Tetouan', email: 'soukaina.bennani@email.com', source: 'walk-in', budget: '540000', status: 'closed-lost' },
+      { name: 'Nabil Squalli', phone: '+212670123456', city: 'Casablanca', email: 'nabil.squalli@email.com', source: 'website', budget: '780000', status: 'new' },
+      { name: 'Hajar Kettani', phone: '+212671234567', city: 'Rabat', email: 'hajar.kettani@email.com', source: 'facebook', budget: '360000', status: 'contacted' },
+      { name: 'Zakaria Filali', phone: '+212672345678', city: 'Marrakech', email: 'zakaria.filali@email.com', source: 'google', budget: '610000', status: 'qualified' },
+      { name: 'Meryem Hajji', phone: '+212673456789', city: 'Fes', email: 'meryem.hajji@email.com', source: 'referral', budget: '460000', status: 'proposal' },
+      { name: 'Anass Bensouda', phone: '+212674567890', city: 'Tangier', email: 'anass.bensouda@email.com', source: 'walk-in', budget: '830000', status: 'closed-won' },
+      { name: 'Kenza Cherkaoui', phone: '+212675678901', city: 'Agadir', email: 'kenza.cherkaoui@email.com', source: 'website', budget: '380000', status: 'new' },
+      { name: 'Mouad Naciri', phone: '+212676789012', city: 'Meknes', email: 'mouad.naciri@email.com', source: 'facebook', budget: '720000', status: 'negotiation' },
+      { name: 'Yasmine Benali', phone: '+212677890123', city: 'Oujda', email: 'yasmine.benali@email.com', source: 'google', budget: '480000', status: 'contacted' },
+      { name: 'Reda Berrada', phone: '+212678901234', city: 'Kenitra', email: 'reda.berrada@email.com', source: 'referral', budget: '650000', status: 'qualified' },
+      { name: 'Chaimae Tounsi', phone: '+212679012345', city: 'Tetouan', email: 'chaimae.tounsi@email.com', source: 'walk-in', budget: '600000', status: 'proposal' },
+      { name: 'Ayoub Lahlou', phone: '+212680123456', city: 'Casablanca', email: 'ayoub.lahlou@email.com', source: 'website', budget: '940000', status: 'closed-won' },
+      { name: 'Manal Benkirane', phone: '+212681234567', city: 'Rabat', email: 'manal.benkirane@email.com', source: 'facebook', budget: '330000', status: 'new' },
+      { name: 'Hicham Alami', phone: '+212682345678', city: 'Marrakech', email: 'hicham.alami@email.com', source: 'google', budget: '690000', status: 'contacted' },
+      { name: 'Rajae Fassi', phone: '+212683456789', city: 'Fes', email: 'rajae.fassi@email.com', source: 'referral', budget: '510000', status: 'qualified' },
+      { name: 'Bilal Benjelloun', phone: '+212684567890', city: 'Tangier', email: 'bilal.benjelloun@email.com', source: 'walk-in', budget: '770000', status: 'negotiation' },
+      { name: 'Amina Chraibi', phone: '+212685678901', city: 'Agadir', email: 'amina.chraibi@email.com', source: 'website', budget: '410000', status: 'new' },
+      { name: 'Kamal Idrissi', phone: '+212686789012', city: 'Meknes', email: 'kamal.idrissi@email.com', source: 'facebook', budget: '840000', status: 'proposal' },
+      { name: 'Siham Mansouri', phone: '+212687890123', city: 'Oujda', email: 'siham.mansouri@email.com', source: 'google', budget: '450000', status: 'contacted' },
+      { name: 'Abderrazak Tazi', phone: '+212688901234', city: 'Kenitra', email: 'abderrazak.tazi@email.com', source: 'referral', budget: '710000', status: 'qualified' },
+      { name: 'Fatima Ouali', phone: '+212689012345', city: 'Tetouan', email: 'fatima.ouali@email.com', source: 'walk-in', budget: '560000', status: 'closed-lost' },
+      { name: 'Mohamed Ziani', phone: '+212690123456', city: 'Casablanca', email: 'mohamed.ziani@email.com', source: 'website', budget: '800000', status: 'negotiation' },
+      { name: 'Lamiaa Amrani', phone: '+212691234567', city: 'Rabat', email: 'lamiaa.amrani@email.com', source: 'facebook', budget: '370000', status: 'new' },
+      { name: 'Youssef Kadiri', phone: '+212692345678', city: 'Marrakech', email: 'youssef.kadiri@email.com', source: 'google', budget: '630000', status: 'contacted' },
+      { name: 'Houda Benkirane', phone: '+212693456789', city: 'Fes', email: 'houda.benkirane@email.com', source: 'referral', budget: '490000', status: 'qualified' },
+      { name: 'Omar Lamrani', phone: '+212694567890', city: 'Tangier', email: 'omar.lamrani@email.com', source: 'walk-in', budget: '860000', status: 'closed-won' },
+      { name: 'Nadia Senhaji', phone: '+212695678901', city: 'Agadir', email: 'nadia.senhaji@email.com', source: 'website', budget: '430000', status: 'proposal' },
+      { name: 'Hassan Alaoui', phone: '+212696789012', city: 'Meknes', email: 'hassan.alaoui@email.com', source: 'facebook', budget: '750000', status: 'negotiation' },
+      { name: 'Zineb Bennani', phone: '+212697890123', city: 'Oujda', email: 'zineb.bennani@email.com', source: 'google', budget: '520000', status: 'new' },
+      { name: 'Rachid Squalli', phone: '+212698901234', city: 'Kenitra', email: 'rachid.squalli@email.com', source: 'referral', budget: '680000', status: 'contacted' },
+      { name: 'Samira Kettani', phone: '+212699012345', city: 'Tetouan', email: 'samira.kettani@email.com', source: 'walk-in', budget: '590000', status: 'qualified' }
+    ];
+
+    let createdCount = 0;
+    for (const leadData of additionalLeads) {
+      try {
+        // Split name into first_name and last_name
+        const nameParts = leadData.name.split(' ');
+        const firstName = nameParts[0] || '';
+        const lastName = nameParts.slice(1).join(' ') || '';
+
+        // Randomly assign to one of your actual team members
+        const randomIndex = Math.floor(Math.random() * actualTeamMembers.length);
+        const assignedAgent = actualTeamMembers[randomIndex];
+
+        const newLead = {
+          id: generateId(),
+          first_name: firstName,
+          last_name: lastName,
+          email: leadData.email,
+          phone: leadData.phone,
+          whatsapp: leadData.phone,
+          source: leadData.source,
+          budget: leadData.budget ? parseFloat(leadData.budget) : null,
+          notes: `Additional sample lead from ${leadData.city}`,
+          status: leadData.status,
+          assigned_to: assignedAgent,
+          language: 'fr',
+          agency_id: 'default-agency',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+
+        await pool.query(`
+          INSERT INTO leads (id, first_name, last_name, email, phone, whatsapp, source, budget, notes, status, assigned_to, language, agency_id, created_at, updated_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+        `, [
+          newLead.id, newLead.first_name, newLead.last_name, newLead.email, newLead.phone,
+          newLead.whatsapp, newLead.source, newLead.budget, newLead.notes,
+          newLead.status, newLead.assigned_to, newLead.language, newLead.agency_id, newLead.created_at, newLead.updated_at
+        ]);
+
+        createdCount++;
+      } catch (error) {
+        console.error(`Error creating lead ${leadData.name}:`, error);
+      }
+    }
+
+    console.log(`✅ Successfully added ${createdCount} additional leads`);
+
+    res.json({
+      success: true,
+      message: `Successfully added ${createdCount} additional leads with different statuses`,
+      createdCount
+    });
+  } catch (error) {
+    console.error('Error adding additional leads:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to add additional leads'
     });
   }
 });
