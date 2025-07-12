@@ -116,6 +116,106 @@ if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
   console.log('⚠️ Twilio credentials not found - WhatsApp messages will be logged only');
 }
 
+// Wati WhatsApp Service (Alternative to Twilio with no sandbox restrictions)
+const sendWatiWhatsApp = async (phoneNumber, message) => {
+  if (!process.env.USE_WATI || !process.env.WATI_ACCESS_TOKEN) {
+    return { success: false, error: 'Wati not configured' };
+  }
+
+  try {
+    console.log('📱 Sending WhatsApp via Wati to:', phoneNumber);
+
+    // Remove + from phone number for Wati API
+    const cleanNumber = phoneNumber.replace('+', '');
+
+    const response = await fetch(`${process.env.WATI_API_ENDPOINT}/api/v1/sendSessionMessage/${cleanNumber}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.WATI_ACCESS_TOKEN}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        messageText: message
+      })
+    });
+
+    const result = await response.json();
+
+    if (response.ok && result.result) {
+      console.log('✅ Wati WhatsApp message sent successfully!');
+      console.log('📧 Message ID:', result.id);
+
+      return {
+        success: true,
+        method: 'wati',
+        messageId: result.id,
+        status: 'sent',
+        phoneNumber: phoneNumber
+      };
+    } else {
+      console.error('❌ Wati API error:', result);
+      throw new Error(result.info || result.message || 'Wati API error');
+    }
+  } catch (error) {
+    console.error('❌ Wati WhatsApp send failed:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+};
+
+// Meta WhatsApp Business Cloud API Service (Official Meta API)
+const sendMetaWhatsApp = async (phoneNumber, message) => {
+  if (!process.env.USE_META_WHATSAPP || !process.env.META_ACCESS_TOKEN) {
+    return { success: false, error: 'Meta WhatsApp not configured' };
+  }
+
+  try {
+    console.log('📱 Sending WhatsApp via Meta Business API to:', phoneNumber);
+
+    const response = await fetch(`https://graph.facebook.com/v18.0/${process.env.META_PHONE_NUMBER_ID}/messages`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.META_ACCESS_TOKEN}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        to: phoneNumber.replace('+', ''),
+        type: 'text',
+        text: {
+          body: message
+        }
+      })
+    });
+
+    const result = await response.json();
+
+    if (response.ok && result.messages) {
+      console.log('✅ Meta WhatsApp message sent successfully!');
+      console.log('📧 Message ID:', result.messages[0].id);
+
+      return {
+        success: true,
+        method: 'meta_whatsapp',
+        messageId: result.messages[0].id,
+        status: 'sent',
+        phoneNumber: phoneNumber
+      };
+    } else {
+      console.error('❌ Meta WhatsApp API error:', result);
+      throw new Error(result.error?.message || 'Meta WhatsApp API error');
+    }
+  } catch (error) {
+    console.error('❌ Meta WhatsApp send failed:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+};
+
 // Initialize database tables
 const initDatabase = async () => {
   try {
@@ -321,7 +421,43 @@ ${agent.name}
     console.log('📞 Phone:', phoneNumber);
     console.log('👤 Agent:', agent.name);
 
-    // Try to send via Twilio if configured
+    // Try Wati first (best option - no sandbox restrictions)
+    if (process.env.USE_WATI) {
+      const watiResult = await sendWatiWhatsApp(phoneNumber, message);
+      if (watiResult.success) {
+        return {
+          success: true,
+          method: 'wati',
+          messageId: watiResult.messageId,
+          status: watiResult.status,
+          agent: agent.name,
+          leadName: lead.name,
+          phoneNumber: phoneNumber
+        };
+      } else {
+        console.log('⚠️ Wati failed, trying next option...');
+      }
+    }
+
+    // Try Meta WhatsApp Business API (official, 1000 free/month)
+    if (process.env.USE_META_WHATSAPP) {
+      const metaResult = await sendMetaWhatsApp(phoneNumber, message);
+      if (metaResult.success) {
+        return {
+          success: true,
+          method: 'meta_whatsapp',
+          messageId: metaResult.messageId,
+          status: metaResult.status,
+          agent: agent.name,
+          leadName: lead.name,
+          phoneNumber: phoneNumber
+        };
+      } else {
+        console.log('⚠️ Meta WhatsApp failed, trying next option...');
+      }
+    }
+
+    // Try to send via Twilio if configured (fallback)
     if (twilioClient && process.env.TWILIO_WHATSAPP_FROM) {
       try {
         const twilioMessage = await twilioClient.messages.create({
@@ -680,6 +816,74 @@ app.post('/api/auth/login', (req, res) => {
     res.status(400).json({
       success: false,
       message: 'Email and password required'
+    });
+  }
+});
+
+// Get database statistics (development endpoint)
+app.get('/api/leads/stats', async (req, res) => {
+  try {
+    console.log('📊 Getting lead statistics...');
+
+    const totalLeads = await pool.query('SELECT COUNT(*) as count FROM leads');
+    const emptyNames = await pool.query(`
+      SELECT COUNT(*) as count FROM leads
+      WHERE first_name IS NULL OR first_name = '' OR TRIM(first_name) = ''
+    `);
+    const unassigned = await pool.query(`
+      SELECT COUNT(*) as count FROM leads
+      WHERE assigned_to IS NULL OR assigned_to = ''
+    `);
+    const sampleLeads = await pool.query(`
+      SELECT id, first_name, last_name, assigned_to, created_at
+      FROM leads
+      ORDER BY created_at DESC
+      LIMIT 5
+    `);
+
+    res.json({
+      success: true,
+      data: {
+        totalLeads: parseInt(totalLeads.rows[0].count),
+        emptyNames: parseInt(emptyNames.rows[0].count),
+        unassigned: parseInt(unassigned.rows[0].count),
+        sampleLeads: sampleLeads.rows
+      }
+    });
+  } catch (error) {
+    console.error('Error getting lead stats:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get lead statistics'
+    });
+  }
+});
+
+// Clean up leads with empty names (development endpoint)
+app.delete('/api/leads/cleanup', async (req, res) => {
+  try {
+    console.log('🧹 Starting lead cleanup...');
+
+    // Delete leads with empty or null first_name
+    const result = await pool.query(`
+      DELETE FROM leads
+      WHERE first_name IS NULL
+         OR first_name = ''
+         OR TRIM(first_name) = ''
+    `);
+
+    console.log(`🗑️ Deleted ${result.rowCount} leads with empty names`);
+
+    res.json({
+      success: true,
+      message: `Cleaned up ${result.rowCount} leads with empty names`,
+      deletedCount: result.rowCount
+    });
+  } catch (error) {
+    console.error('Error cleaning up leads:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to clean up leads'
     });
   }
 });
