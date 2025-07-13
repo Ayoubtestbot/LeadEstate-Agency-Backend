@@ -260,11 +260,12 @@ const initDatabase = async () => {
       CREATE TABLE IF NOT EXISTS team_members (
         id VARCHAR(255) PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
-        email VARCHAR(255),
+        email VARCHAR(255) UNIQUE,
         phone VARCHAR(255),
         role VARCHAR(255),
         department VARCHAR(255),
         status VARCHAR(255) DEFAULT 'active',
+        password VARCHAR(255),
         joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -275,6 +276,12 @@ const initDatabase = async () => {
     await pool.query(`
       ALTER TABLE leads
       ADD COLUMN IF NOT EXISTS assigned_to VARCHAR(255)
+    `);
+
+    // Add password column to team_members if it doesn't exist
+    await pool.query(`
+      ALTER TABLE team_members
+      ADD COLUMN IF NOT EXISTS password VARCHAR(255)
     `);
 
     await pool.query(`
