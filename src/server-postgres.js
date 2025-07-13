@@ -260,7 +260,7 @@ const initDatabase = async () => {
       CREATE TABLE IF NOT EXISTS team_members (
         id VARCHAR(255) PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
-        email VARCHAR(255) UNIQUE,
+        email VARCHAR(255) UNIQUE NOT NULL,
         phone VARCHAR(255),
         role VARCHAR(255),
         department VARCHAR(255),
@@ -283,6 +283,17 @@ const initDatabase = async () => {
       ALTER TABLE team_members
       ADD COLUMN IF NOT EXISTS password VARCHAR(255)
     `);
+
+    // Add unique constraint to email column if it doesn't exist
+    try {
+      await pool.query(`
+        ALTER TABLE team_members
+        ADD CONSTRAINT team_members_email_unique UNIQUE (email)
+      `);
+    } catch (error) {
+      // Constraint might already exist, ignore error
+      console.log('Email unique constraint already exists or failed to add:', error.message);
+    }
 
     await pool.query(`
       ALTER TABLE leads
@@ -1800,26 +1811,25 @@ app.post('/api/create-demo-users', async (req, res) => {
       }
     ];
 
+    // Delete existing demo users first, then insert new ones
+    console.log('🗑️ Deleting existing demo users...');
+    await pool.query(`
+      DELETE FROM team_members
+      WHERE email IN ('manager@leadestate.com', 'superagent@leadestate.com', 'agent@leadestate.com')
+    `);
+
     // Insert demo users
     for (const user of demoUsers) {
       try {
         await pool.query(`
           INSERT INTO team_members (id, name, email, phone, role, department, status, password, joined_at, created_at, updated_at)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-          ON CONFLICT (email) DO UPDATE SET
-            name = EXCLUDED.name,
-            phone = EXCLUDED.phone,
-            role = EXCLUDED.role,
-            department = EXCLUDED.department,
-            status = EXCLUDED.status,
-            password = EXCLUDED.password,
-            updated_at = EXCLUDED.updated_at
         `, [
           user.id, user.name, user.email, user.phone, user.role,
           user.department, user.status, user.password,
           new Date().toISOString(), new Date().toISOString(), new Date().toISOString()
         ]);
-        console.log(`✅ Created/Updated demo user: ${user.name} (${user.role})`);
+        console.log(`✅ Created demo user: ${user.name} (${user.role}) with email: ${user.email}`);
       } catch (userError) {
         console.error(`❌ Failed to create user ${user.name}:`, userError.message);
       }
