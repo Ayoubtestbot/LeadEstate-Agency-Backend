@@ -95,11 +95,43 @@ async function createIndexes(sequelize) {
        ON activities(property_id) WHERE property_id IS NOT NULL;`,
       
       // Lead-Properties junction table indexes
-      `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_lead_properties_lead_id 
+      `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_lead_properties_lead_id
        ON lead_properties(lead_id);`,
-      
-      `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_lead_properties_property_id 
+
+      `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_lead_properties_property_id
        ON lead_properties(property_id);`,
+
+      // Lead Notes table indexes
+      `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_lead_notes_lead_id
+       ON lead_notes(lead_id);`,
+
+      `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_lead_notes_created_by
+       ON lead_notes(created_by) WHERE created_by IS NOT NULL;`,
+
+      `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_lead_notes_type
+       ON lead_notes(type);`,
+
+      `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_lead_notes_created_at
+       ON lead_notes(created_at DESC);`,
+
+      // Lead Assignment History table indexes
+      `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_lead_assignment_history_lead_id
+       ON lead_assignment_history(lead_id);`,
+
+      `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_lead_assignment_history_from_agent
+       ON lead_assignment_history(from_agent_id) WHERE from_agent_id IS NOT NULL;`,
+
+      `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_lead_assignment_history_to_agent
+       ON lead_assignment_history(to_agent_id) WHERE to_agent_id IS NOT NULL;`,
+
+      `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_lead_assignment_history_changed_by
+       ON lead_assignment_history(changed_by_id) WHERE changed_by_id IS NOT NULL;`,
+
+      `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_lead_assignment_history_created_at
+       ON lead_assignment_history(created_at DESC);`,
+
+      `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_lead_assignment_history_action_type
+       ON lead_assignment_history(action_type);`,
     ];
     
     for (const query of queries) {

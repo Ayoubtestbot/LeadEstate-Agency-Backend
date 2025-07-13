@@ -3,6 +3,8 @@ const { getSequelize } = require('../database/connection');
 // Import model factory functions
 const getUserModel = require('./User');
 const getLeadModel = require('./Lead');
+const { getLeadNoteModel } = require('./LeadNote');
+const { getLeadAssignmentHistoryModel } = require('./LeadAssignmentHistory');
 
 // Initialize models and setup associations
 const initializeModels = () => {
@@ -17,6 +19,8 @@ const initializeModels = () => {
     // Initialize models
     const User = getUserModel();
     const Lead = getLeadModel();
+    const LeadNote = getLeadNoteModel();
+    const LeadAssignmentHistory = getLeadAssignmentHistoryModel();
 
     // Setup associations
     User.hasMany(Lead, {
@@ -29,9 +33,51 @@ const initializeModels = () => {
       as: 'assignedUser'
     });
 
+    // Lead Notes associations
+    Lead.hasMany(LeadNote, {
+      foreignKey: 'lead_id',
+      as: 'notes'
+    });
+
+    LeadNote.belongsTo(Lead, {
+      foreignKey: 'lead_id',
+      as: 'lead'
+    });
+
+    LeadNote.belongsTo(User, {
+      foreignKey: 'created_by',
+      as: 'creator'
+    });
+
+    // Lead Assignment History associations
+    Lead.hasMany(LeadAssignmentHistory, {
+      foreignKey: 'lead_id',
+      as: 'assignmentHistory'
+    });
+
+    LeadAssignmentHistory.belongsTo(Lead, {
+      foreignKey: 'lead_id',
+      as: 'lead'
+    });
+
+    LeadAssignmentHistory.belongsTo(User, {
+      foreignKey: 'from_agent_id',
+      as: 'fromAgent'
+    });
+
+    LeadAssignmentHistory.belongsTo(User, {
+      foreignKey: 'to_agent_id',
+      as: 'toAgent'
+    });
+
+    LeadAssignmentHistory.belongsTo(User, {
+      foreignKey: 'changed_by_id',
+      as: 'changedBy'
+    });
+
     console.log('Models initialized and associations setup complete');
 
-    return { User, Lead };
+    return { User, Lead, LeadNote, LeadAssignmentHistory };
   } catch (error) {
     console.log('Model initialization skipped:', error.message);
     return null;
@@ -49,7 +95,9 @@ const getModels = () => {
   if (sequelize.models.User && sequelize.models.Lead) {
     return {
       User: sequelize.models.User,
-      Lead: sequelize.models.Lead
+      Lead: sequelize.models.Lead,
+      LeadNote: sequelize.models.LeadNote,
+      LeadAssignmentHistory: sequelize.models.LeadAssignmentHistory
     };
   }
 
@@ -60,6 +108,8 @@ const getModels = () => {
 module.exports = {
   getUserModel,
   getLeadModel,
+  getLeadNoteModel,
+  getLeadAssignmentHistoryModel,
   initializeModels,
   getModels
 };
