@@ -1480,6 +1480,18 @@ app.put('/api/leads/:id', async (req, res) => {
     const { id } = req.params;
     const updateData = req.body;
 
+    // Get current lead data to track assignment changes
+    const currentLead = await pool.query('SELECT * FROM leads WHERE id = $1', [id]);
+    if (currentLead.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Lead not found'
+      });
+    }
+
+    const oldAssignedTo = currentLead.rows[0].assigned_to;
+    const newAssignedTo = updateData.assignedTo;
+
     // Split name into first_name and last_name if provided
     let firstName = null;
     let lastName = null;
@@ -1509,6 +1521,38 @@ app.put('/api/leads/:id', async (req, res) => {
       updateData.phone, updateData.source, updateData.budget ? parseFloat(updateData.budget) : null,
       updateData.notes, updateData.status, updateData.assignedTo, new Date().toISOString()
     ]);
+
+    // Track assignment changes
+    if (newAssignedTo && newAssignedTo !== oldAssignedTo) {
+      console.log('📋 Assignment changed from', oldAssignedTo, 'to', newAssignedTo);
+
+      // Create assignment history table if it doesn't exist
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS lead_assignment_history (
+          id SERIAL PRIMARY KEY,
+          lead_id INTEGER NOT NULL,
+          from_agent VARCHAR(255),
+          to_agent VARCHAR(255) NOT NULL,
+          changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          changed_by VARCHAR(255) NOT NULL,
+          reason TEXT,
+          action_type VARCHAR(50) DEFAULT 'assignment'
+        )
+      `);
+
+      // Insert assignment history record
+      await pool.query(
+        'INSERT INTO lead_assignment_history (lead_id, from_agent, to_agent, changed_by, reason, action_type) VALUES ($1, $2, $3, $4, $5, $6)',
+        [
+          id,
+          oldAssignedTo,
+          newAssignedTo,
+          updateData.changedBy || 'System',
+          updateData.assignmentReason || 'Lead assignment updated',
+          oldAssignedTo ? 'reassignment' : 'initial_assignment'
+        ]
+      );
+    }
 
     if (result.rows.length === 0) {
       return res.status(404).json({
@@ -1574,30 +1618,38 @@ app.get('/api/leads/:leadId/notes', async (req, res) => {
     const { leadId } = req.params;
     console.log('📝 Fetching notes for lead:', leadId);
 
-    // Mock notes data for now
-    const mockNotes = [
-      {
-        id: 1,
-        content: 'Initial contact made via phone. Client interested in 3-bedroom apartments.',
-        type: 'note',
-        createdBy: 'Sarah Johnson',
-        createdAt: new Date().toISOString(),
-        isPrivate: false
-      },
-      {
-        id: 2,
-        content: 'Follow-up call scheduled for tomorrow at 2 PM.',
-        type: 'reminder',
-        createdBy: 'Sarah Johnson',
-        createdAt: new Date(Date.now() - 3600000).toISOString(),
-        isPrivate: false
-      }
-    ];
+    // Create notes table if it doesn't exist
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS lead_notes (
+        id SERIAL PRIMARY KEY,
+        lead_id INTEGER NOT NULL,
+        content TEXT NOT NULL,
+        type VARCHAR(50) DEFAULT 'note',
+        created_by VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        is_private BOOLEAN DEFAULT false
+      )
+    `);
+
+    // Fetch real notes from database
+    const result = await pool.query(
+      'SELECT * FROM lead_notes WHERE lead_id = $1 ORDER BY created_at DESC',
+      [leadId]
+    );
+
+    const notes = result.rows.map(note => ({
+      id: note.id,
+      content: note.content,
+      type: note.type,
+      createdBy: note.created_by,
+      createdAt: note.created_at,
+      isPrivate: note.is_private
+    }));
 
     res.json({
       success: true,
       message: 'Notes retrieved successfully',
-      data: mockNotes
+      data: notes
     });
   } catch (error) {
     console.error('Error fetching notes:', error);
@@ -1623,14 +1675,19 @@ app.post('/api/leads/:leadId/notes', async (req, res) => {
       });
     }
 
-    // Mock response for now
+    // Insert real note into database
+    const result = await pool.query(
+      'INSERT INTO lead_notes (lead_id, content, type, created_by, is_private) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+      [leadId, content.trim(), type, createdBy || 'Unknown User', isPrivate]
+    );
+
     const newNote = {
-      id: Date.now(),
-      content: content.trim(),
-      type,
-      createdBy: createdBy || 'Unknown User',
-      createdAt: new Date().toISOString(),
-      isPrivate
+      id: result.rows[0].id,
+      content: result.rows[0].content,
+      type: result.rows[0].type,
+      createdBy: result.rows[0].created_by,
+      createdAt: result.rows[0].created_at,
+      isPrivate: result.rows[0].is_private
     };
 
     res.status(201).json({
@@ -1654,32 +1711,40 @@ app.get('/api/leads/:leadId/assignee-history', async (req, res) => {
     const { leadId } = req.params;
     console.log('📋 Fetching assignment history for lead:', leadId);
 
-    // Mock assignment history data
-    const mockHistory = [
-      {
-        id: 1,
-        fromAgent: null,
-        toAgent: 'Sarah Johnson',
-        changedAt: new Date().toISOString(),
-        changedBy: 'System',
-        reason: 'Initial assignment',
-        actionType: 'initial_assignment'
-      },
-      {
-        id: 2,
-        fromAgent: 'John Smith',
-        toAgent: 'Sarah Johnson',
-        changedAt: new Date(Date.now() - 86400000).toISOString(),
-        changedBy: 'Mike Chen',
-        reason: 'Workload redistribution',
-        actionType: 'reassignment'
-      }
-    ];
+    // Create assignment history table if it doesn't exist
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS lead_assignment_history (
+        id SERIAL PRIMARY KEY,
+        lead_id INTEGER NOT NULL,
+        from_agent VARCHAR(255),
+        to_agent VARCHAR(255) NOT NULL,
+        changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        changed_by VARCHAR(255) NOT NULL,
+        reason TEXT,
+        action_type VARCHAR(50) DEFAULT 'assignment'
+      )
+    `);
+
+    // Fetch real assignment history from database
+    const result = await pool.query(
+      'SELECT * FROM lead_assignment_history WHERE lead_id = $1 ORDER BY changed_at DESC',
+      [leadId]
+    );
+
+    const history = result.rows.map(record => ({
+      id: record.id,
+      fromAgent: record.from_agent,
+      toAgent: record.to_agent,
+      changedAt: record.changed_at,
+      changedBy: record.changed_by,
+      reason: record.reason,
+      actionType: record.action_type
+    }));
 
     res.json({
       success: true,
       message: 'Assignment history retrieved successfully',
-      data: mockHistory
+      data: history
     });
   } catch (error) {
     console.error('Error fetching assignment history:', error);
