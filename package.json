@@ -5,6 +5,7 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server-postgres.js",
+    "build": "echo 'No build step required for backend'",
     "start-file": "node src/server-production.js",
     "dev": "node src/server-memory.js",
     "migrate": "node src/database/migrate.js",
