@@ -1568,6 +1568,129 @@ app.delete('/api/leads/:id', async (req, res) => {
   }
 });
 
+// Lead Notes API endpoints
+app.get('/api/leads/:leadId/notes', async (req, res) => {
+  try {
+    const { leadId } = req.params;
+    console.log('📝 Fetching notes for lead:', leadId);
+
+    // Mock notes data for now
+    const mockNotes = [
+      {
+        id: 1,
+        content: 'Initial contact made via phone. Client interested in 3-bedroom apartments.',
+        type: 'note',
+        createdBy: 'Sarah Johnson',
+        createdAt: new Date().toISOString(),
+        isPrivate: false
+      },
+      {
+        id: 2,
+        content: 'Follow-up call scheduled for tomorrow at 2 PM.',
+        type: 'reminder',
+        createdBy: 'Sarah Johnson',
+        createdAt: new Date(Date.now() - 3600000).toISOString(),
+        isPrivate: false
+      }
+    ];
+
+    res.json({
+      success: true,
+      message: 'Notes retrieved successfully',
+      data: mockNotes
+    });
+  } catch (error) {
+    console.error('Error fetching notes:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve notes',
+      error: error.message
+    });
+  }
+});
+
+app.post('/api/leads/:leadId/notes', async (req, res) => {
+  try {
+    const { leadId } = req.params;
+    const { content, type = 'note', createdBy, isPrivate = false } = req.body;
+
+    console.log('📝 Adding note to lead:', leadId, 'Content:', content);
+
+    if (!content || content.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Note content is required'
+      });
+    }
+
+    // Mock response for now
+    const newNote = {
+      id: Date.now(),
+      content: content.trim(),
+      type,
+      createdBy: createdBy || 'Unknown User',
+      createdAt: new Date().toISOString(),
+      isPrivate
+    };
+
+    res.status(201).json({
+      success: true,
+      message: 'Note added successfully',
+      data: newNote
+    });
+  } catch (error) {
+    console.error('Error adding note:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to add note',
+      error: error.message
+    });
+  }
+});
+
+// Lead Assignment History API endpoints
+app.get('/api/leads/:leadId/assignee-history', async (req, res) => {
+  try {
+    const { leadId } = req.params;
+    console.log('📋 Fetching assignment history for lead:', leadId);
+
+    // Mock assignment history data
+    const mockHistory = [
+      {
+        id: 1,
+        fromAgent: null,
+        toAgent: 'Sarah Johnson',
+        changedAt: new Date().toISOString(),
+        changedBy: 'System',
+        reason: 'Initial assignment',
+        actionType: 'initial_assignment'
+      },
+      {
+        id: 2,
+        fromAgent: 'John Smith',
+        toAgent: 'Sarah Johnson',
+        changedAt: new Date(Date.now() - 86400000).toISOString(),
+        changedBy: 'Mike Chen',
+        reason: 'Workload redistribution',
+        actionType: 'reassignment'
+      }
+    ];
+
+    res.json({
+      success: true,
+      message: 'Assignment history retrieved successfully',
+      data: mockHistory
+    });
+  } catch (error) {
+    console.error('Error fetching assignment history:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve assignment history',
+      error: error.message
+    });
+  }
+});
+
 // Property linking endpoints
 app.post('/api/leads/:leadId/link-property/:propertyId', async (req, res) => {
   try {
