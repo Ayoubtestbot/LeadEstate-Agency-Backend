@@ -2700,7 +2700,27 @@ app.put('/api/properties/:id', async (req, res) => {
 // Team endpoints
 app.get('/api/team', async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM team_members ORDER BY created_at DESC');
+    // Only return real team members that have passwords (the ones actually used)
+    const result = await pool.query(`
+      SELECT * FROM team_members
+      WHERE password IS NOT NULL
+      AND email IN (
+        'sophie.moreau@leadestate.com',
+        'antoine.dubois@leadestate.com',
+        'emilie.rousseau@leadestate.com',
+        'julien.martin@leadestate.com',
+        'camille.laurent@leadestate.com',
+        'ayoubjada69@gmail.com'
+      )
+      ORDER BY
+        CASE role
+          WHEN 'manager' THEN 1
+          WHEN 'super_agent' THEN 2
+          WHEN 'agent' THEN 3
+          ELSE 4
+        END,
+        created_at DESC
+    `);
 
     // Format data for frontend compatibility
     const formattedTeamMembers = result.rows.map(member => ({
@@ -2710,6 +2730,8 @@ app.get('/api/team', async (req, res) => {
       joinedAt: member.joined_at,
       joinDate: member.joined_at // Frontend expects this field name
     }));
+
+    console.log('📋 Returning real team members:', formattedTeamMembers.length);
 
     res.json({
       success: true,
