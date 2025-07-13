@@ -50,23 +50,35 @@ router.get('/', async (req, res) => {
 
     const { Lead, LeadNote, LeadAssignmentHistory } = models;
 
-    const leads = await Lead.findAll({
-      include: [
-        {
-          model: LeadNote,
-          as: 'notes',
-          limit: 5,
-          order: [['created_at', 'DESC']]
-        },
-        {
-          model: LeadAssignmentHistory,
-          as: 'assignmentHistory',
-          limit: 10,
-          order: [['created_at', 'DESC']]
-        }
-      ],
-      order: [['created_at', 'DESC']]
-    });
+    let leads;
+    try {
+      // Try to fetch with associations first
+      leads = await Lead.findAll({
+        include: [
+          {
+            model: LeadNote,
+            as: 'notes',
+            limit: 5,
+            order: [['created_at', 'DESC']],
+            required: false
+          },
+          {
+            model: LeadAssignmentHistory,
+            as: 'assignmentHistory',
+            limit: 10,
+            order: [['created_at', 'DESC']],
+            required: false
+          }
+        ],
+        order: [['created_at', 'DESC']]
+      });
+    } catch (associationError) {
+      console.log('Association error, falling back to simple query:', associationError.message);
+      // Fallback to simple query without associations
+      leads = await Lead.findAll({
+        order: [['created_at', 'DESC']]
+      });
+    }
 
     // Transform data to match frontend expectations
     const transformedLeads = leads.map(lead => ({
