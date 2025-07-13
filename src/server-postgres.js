@@ -1526,11 +1526,11 @@ app.put('/api/leads/:id', async (req, res) => {
     if (newAssignedTo && newAssignedTo !== oldAssignedTo) {
       console.log('📋 Assignment changed from', oldAssignedTo, 'to', newAssignedTo);
 
-      // Create assignment history table if it doesn't exist
+      // Ensure assignment history table exists with correct schema
       await pool.query(`
         CREATE TABLE IF NOT EXISTS lead_assignment_history (
           id SERIAL PRIMARY KEY,
-          lead_id INTEGER NOT NULL,
+          lead_id VARCHAR(255) NOT NULL,
           from_agent VARCHAR(255),
           to_agent VARCHAR(255) NOT NULL,
           changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -1618,11 +1618,12 @@ app.get('/api/leads/:leadId/notes', async (req, res) => {
     const { leadId } = req.params;
     console.log('📝 Fetching notes for lead:', leadId);
 
-    // Create notes table if it doesn't exist
+    // Drop and recreate notes table with correct schema
+    await pool.query('DROP TABLE IF EXISTS lead_notes');
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS lead_notes (
+      CREATE TABLE lead_notes (
         id SERIAL PRIMARY KEY,
-        lead_id INTEGER NOT NULL,
+        lead_id VARCHAR(255) NOT NULL,
         content TEXT NOT NULL,
         type VARCHAR(50) DEFAULT 'note',
         created_by VARCHAR(255) NOT NULL,
@@ -1711,11 +1712,12 @@ app.get('/api/leads/:leadId/assignee-history', async (req, res) => {
     const { leadId } = req.params;
     console.log('📋 Fetching assignment history for lead:', leadId);
 
-    // Create assignment history table if it doesn't exist
+    // Drop and recreate assignment history table with correct schema
+    await pool.query('DROP TABLE IF EXISTS lead_assignment_history');
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS lead_assignment_history (
+      CREATE TABLE lead_assignment_history (
         id SERIAL PRIMARY KEY,
-        lead_id INTEGER NOT NULL,
+        lead_id VARCHAR(255) NOT NULL,
         from_agent VARCHAR(255),
         to_agent VARCHAR(255) NOT NULL,
         changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
