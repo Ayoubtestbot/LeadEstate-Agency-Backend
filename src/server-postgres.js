@@ -1763,6 +1763,172 @@ app.get('/api/leads/:leadId/assignee-history', async (req, res) => {
   }
 });
 
+// Create demo users for testing different roles
+app.post('/api/create-demo-users', async (req, res) => {
+  try {
+    console.log('👥 Creating demo users for role testing...');
+
+    // Create team_members table if it doesn't exist
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS team_members (
+        id VARCHAR(255) PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        phone VARCHAR(50),
+        role VARCHAR(50) NOT NULL,
+        department VARCHAR(100),
+        status VARCHAR(50) DEFAULT 'active',
+        password VARCHAR(255),
+        joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Demo users with different roles
+    const demoUsers = [
+      {
+        id: 'manager-001',
+        name: 'Sarah Johnson',
+        email: 'manager@leadestate.com',
+        phone: '+1234567890',
+        role: 'manager',
+        department: 'Management',
+        password: 'manager123',
+        status: 'active'
+      },
+      {
+        id: 'super-agent-001',
+        name: 'Mike Chen',
+        email: 'superagent@leadestate.com',
+        phone: '+1234567891',
+        role: 'super_agent',
+        department: 'Sales',
+        password: 'superagent123',
+        status: 'active'
+      },
+      {
+        id: 'agent-001',
+        name: 'Emily Davis',
+        email: 'agent@leadestate.com',
+        phone: '+1234567892',
+        role: 'agent',
+        department: 'Sales',
+        password: 'agent123',
+        status: 'active'
+      }
+    ];
+
+    // Insert demo users
+    for (const user of demoUsers) {
+      try {
+        await pool.query(`
+          INSERT INTO team_members (id, name, email, phone, role, department, status, password, joined_at, created_at, updated_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          ON CONFLICT (email) DO UPDATE SET
+            name = EXCLUDED.name,
+            phone = EXCLUDED.phone,
+            role = EXCLUDED.role,
+            department = EXCLUDED.department,
+            status = EXCLUDED.status,
+            password = EXCLUDED.password,
+            updated_at = EXCLUDED.updated_at
+        `, [
+          user.id, user.name, user.email, user.phone, user.role,
+          user.department, user.status, user.password,
+          new Date().toISOString(), new Date().toISOString(), new Date().toISOString()
+        ]);
+        console.log(`✅ Created/Updated demo user: ${user.name} (${user.role})`);
+      } catch (userError) {
+        console.error(`❌ Failed to create user ${user.name}:`, userError.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Demo users created successfully',
+      users: demoUsers.map(u => ({
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        password: u.password
+      }))
+    });
+  } catch (error) {
+    console.error('❌ Failed to create demo users:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create demo users',
+      error: error.message
+    });
+  }
+});
+
+// Simple login endpoint for demo users
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    console.log('🔐 Login attempt for:', email);
+
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email and password are required'
+      });
+    }
+
+    // Find user in team_members table
+    const result = await pool.query(
+      'SELECT * FROM team_members WHERE email = $1 AND password = $2 AND status = $3',
+      [email, password, 'active']
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid email or password'
+      });
+    }
+
+    const user = result.rows[0];
+
+    // Create a simple token (in production, use JWT)
+    const token = `demo-token-${user.id}-${Date.now()}`;
+
+    // Update last login
+    await pool.query(
+      'UPDATE team_members SET updated_at = $1 WHERE id = $2',
+      [new Date().toISOString(), user.id]
+    );
+
+    console.log('✅ Login successful for:', user.name, '(', user.role, ')');
+
+    res.json({
+      success: true,
+      message: 'Login successful',
+      data: {
+        user: {
+          id: user.id,
+          name: user.name,
+          firstName: user.name.split(' ')[0],
+          email: user.email,
+          role: user.role,
+          department: user.department,
+          status: user.status
+        },
+        token
+      }
+    });
+  } catch (error) {
+    console.error('❌ Login error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Login failed',
+      error: error.message
+    });
+  }
+});
+
 // Migration endpoint to fix database schema
 app.post('/api/migrate-tables', async (req, res) => {
   try {
