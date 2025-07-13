@@ -2371,57 +2371,83 @@ app.get('/api/dashboard/all-data', async (req, res) => {
     try {
       propertiesResult = await pool.query(`
         SELECT
-          id, title, description, price, location, type, status,
-          bedrooms, bathrooms, area, images, created_at, updated_at
+          id, title, description, price,
+          CASE WHEN EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'properties' AND column_name = 'location')
+               THEN location ELSE city END as location,
+          type, status, bedrooms, bathrooms, area, images, created_at, updated_at
         FROM properties
         ORDER BY created_at DESC
         LIMIT 100
       `);
     } catch (error) {
       console.log('⚠️ Properties table error, using fallback data:', error.message);
-      propertiesResult = { rows: [] };
+      // Try simpler query
+      try {
+        propertiesResult = await pool.query(`
+          SELECT id, title, description, price, city as location, type, status, created_at, updated_at
+          FROM properties ORDER BY created_at DESC LIMIT 100
+        `);
+      } catch (simpleError) {
+        console.log('⚠️ Simple properties query also failed:', simpleError.message);
+        propertiesResult = { rows: [] };
+      }
     }
 
     try {
+      // Try to query team_members table
       teamResult = await pool.query(`
         SELECT
-          id, first_name, last_name, email, phone, role, status,
-          joined_at, created_at, updated_at
+          id,
+          CASE WHEN EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'team_members' AND column_name = 'first_name')
+               THEN first_name ELSE name END as first_name,
+          CASE WHEN EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'team_members' AND column_name = 'last_name')
+               THEN last_name ELSE '' END as last_name,
+          email, phone, role, status, joined_at, created_at, updated_at
         FROM team_members
         ORDER BY created_at DESC
         LIMIT 100
       `);
     } catch (error) {
       console.log('⚠️ Team members table error, using fallback data:', error.message);
-      // Provide fallback team data
-      teamResult = {
-        rows: [
-          {
-            id: 1,
-            first_name: 'Sarah',
-            last_name: 'Johnson',
-            email: 'sarah@agency.com',
-            phone: '+1234567890',
-            role: 'manager',
-            status: 'active',
-            joined_at: new Date(),
-            created_at: new Date(),
-            updated_at: new Date()
-          },
-          {
-            id: 2,
-            first_name: 'Mike',
-            last_name: 'Chen',
-            email: 'mike@agency.com',
-            phone: '+1234567891',
-            role: 'agent',
-            status: 'active',
-            joined_at: new Date(),
-            created_at: new Date(),
-            updated_at: new Date()
-          }
-        ]
-      };
+      // Try users table as fallback
+      try {
+        teamResult = await pool.query(`
+          SELECT id, name as first_name, '' as last_name, email, phone, role, 'active' as status,
+                 created_at, updated_at, created_at as joined_at
+          FROM users ORDER BY created_at DESC LIMIT 100
+        `);
+      } catch (usersError) {
+        console.log('⚠️ Users table also failed, using hardcoded fallback:', usersError.message);
+        // Provide fallback team data
+        teamResult = {
+          rows: [
+            {
+              id: 1,
+              first_name: 'Sarah',
+              last_name: 'Johnson',
+              email: 'sarah@agency.com',
+              phone: '+1234567890',
+              role: 'manager',
+              status: 'active',
+              joined_at: new Date(),
+              created_at: new Date(),
+              updated_at: new Date()
+            },
+            {
+              id: 2,
+              first_name: 'Mike',
+              last_name: 'Chen',
+              email: 'mike@agency.com',
+              phone: '+1234567891',
+              role: 'agent',
+              status: 'active',
+              joined_at: new Date(),
+              created_at: new Date(),
+              updated_at: new Date()
+            }
+          ]
+        };
+      }
     }
 
     // Format leads data
