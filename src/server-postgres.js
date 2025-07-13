@@ -792,33 +792,7 @@ app.get('/api/test-insert', async (req, res) => {
   }
 });
 
-// Auth endpoints
-app.post('/api/auth/login', (req, res) => {
-  const { email, password } = req.body;
-  
-  if (email && password) {
-    const user = {
-      id: generateId(),
-      name: 'Demo User',
-      email: email,
-      role: 'manager'
-    };
-    
-    const token = 'demo-token-' + generateId();
-    
-    res.json({
-      success: true,
-      user: user,
-      token: token,
-      message: 'Login successful'
-    });
-  } else {
-    res.status(400).json({
-      success: false,
-      message: 'Email and password required'
-    });
-  }
-});
+
 
 // Get database statistics (development endpoint)
 app.get('/api/leads/stats', async (req, res) => {
