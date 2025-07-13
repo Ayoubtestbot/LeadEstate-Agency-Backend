@@ -1522,43 +1522,50 @@ app.put('/api/leads/:id', async (req, res) => {
       updateData.notes, updateData.status, updateData.assignedTo, new Date().toISOString()
     ]);
 
-    // Track assignment changes
-    if (newAssignedTo && newAssignedTo !== oldAssignedTo) {
-      console.log('📋 Assignment changed from', oldAssignedTo, 'to', newAssignedTo);
-
-      // Ensure assignment history table exists with correct schema
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS lead_assignment_history (
-          id SERIAL PRIMARY KEY,
-          lead_id VARCHAR(255) NOT NULL,
-          from_agent VARCHAR(255),
-          to_agent VARCHAR(255) NOT NULL,
-          changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          changed_by VARCHAR(255) NOT NULL,
-          reason TEXT,
-          action_type VARCHAR(50) DEFAULT 'assignment'
-        )
-      `);
-
-      // Insert assignment history record
-      await pool.query(
-        'INSERT INTO lead_assignment_history (lead_id, from_agent, to_agent, changed_by, reason, action_type) VALUES ($1, $2, $3, $4, $5, $6)',
-        [
-          id,
-          oldAssignedTo,
-          newAssignedTo,
-          updateData.changedBy || 'System',
-          updateData.assignmentReason || 'Lead assignment updated',
-          oldAssignedTo ? 'reassignment' : 'initial_assignment'
-        ]
-      );
-    }
-
     if (result.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: 'Lead not found'
       });
+    }
+
+    // Track assignment changes AFTER confirming update was successful
+    if (newAssignedTo && newAssignedTo !== oldAssignedTo) {
+      console.log('📋 Assignment changed from', oldAssignedTo, 'to', newAssignedTo);
+
+      try {
+        // Ensure assignment history table exists with correct schema
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS lead_assignment_history (
+            id SERIAL PRIMARY KEY,
+            lead_id VARCHAR(255) NOT NULL,
+            from_agent VARCHAR(255),
+            to_agent VARCHAR(255) NOT NULL,
+            changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            changed_by VARCHAR(255) NOT NULL,
+            reason TEXT,
+            action_type VARCHAR(50) DEFAULT 'assignment'
+          )
+        `);
+
+        // Insert assignment history record
+        const historyResult = await pool.query(
+          'INSERT INTO lead_assignment_history (lead_id, from_agent, to_agent, changed_by, reason, action_type) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+          [
+            id,
+            oldAssignedTo,
+            newAssignedTo,
+            updateData.changedBy || 'System',
+            updateData.assignmentReason || 'Lead assignment updated',
+            oldAssignedTo ? 'reassignment' : 'initial_assignment'
+          ]
+        );
+
+        console.log('✅ Assignment history recorded:', historyResult.rows[0]);
+      } catch (historyError) {
+        console.error('❌ Failed to record assignment history:', historyError);
+        // Don't fail the whole update if history recording fails
+      }
     }
 
     console.log('✅ Lead updated successfully:', result.rows[0]);
@@ -1618,10 +1625,9 @@ app.get('/api/leads/:leadId/notes', async (req, res) => {
     const { leadId } = req.params;
     console.log('📝 Fetching notes for lead:', leadId);
 
-    // Drop and recreate notes table with correct schema
-    await pool.query('DROP TABLE IF EXISTS lead_notes');
+    // Create notes table with correct schema if it doesn't exist
     await pool.query(`
-      CREATE TABLE lead_notes (
+      CREATE TABLE IF NOT EXISTS lead_notes (
         id SERIAL PRIMARY KEY,
         lead_id VARCHAR(255) NOT NULL,
         content TEXT NOT NULL,
@@ -1712,10 +1718,9 @@ app.get('/api/leads/:leadId/assignee-history', async (req, res) => {
     const { leadId } = req.params;
     console.log('📋 Fetching assignment history for lead:', leadId);
 
-    // Drop and recreate assignment history table with correct schema
-    await pool.query('DROP TABLE IF EXISTS lead_assignment_history');
+    // Create assignment history table with correct schema if it doesn't exist
     await pool.query(`
-      CREATE TABLE lead_assignment_history (
+      CREATE TABLE IF NOT EXISTS lead_assignment_history (
         id SERIAL PRIMARY KEY,
         lead_id VARCHAR(255) NOT NULL,
         from_agent VARCHAR(255),
@@ -1753,6 +1758,57 @@ app.get('/api/leads/:leadId/assignee-history', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to retrieve assignment history',
+      error: error.message
+    });
+  }
+});
+
+// Migration endpoint to fix database schema
+app.post('/api/migrate-tables', async (req, res) => {
+  try {
+    console.log('🔄 Starting database migration...');
+
+    // Drop old tables with wrong schema
+    await pool.query('DROP TABLE IF EXISTS lead_notes');
+    await pool.query('DROP TABLE IF EXISTS lead_assignment_history');
+
+    // Create new tables with correct schema
+    await pool.query(`
+      CREATE TABLE lead_notes (
+        id SERIAL PRIMARY KEY,
+        lead_id VARCHAR(255) NOT NULL,
+        content TEXT NOT NULL,
+        type VARCHAR(50) DEFAULT 'note',
+        created_by VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        is_private BOOLEAN DEFAULT false
+      )
+    `);
+
+    await pool.query(`
+      CREATE TABLE lead_assignment_history (
+        id SERIAL PRIMARY KEY,
+        lead_id VARCHAR(255) NOT NULL,
+        from_agent VARCHAR(255),
+        to_agent VARCHAR(255) NOT NULL,
+        changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        changed_by VARCHAR(255) NOT NULL,
+        reason TEXT,
+        action_type VARCHAR(50) DEFAULT 'assignment'
+      )
+    `);
+
+    console.log('✅ Database migration completed successfully');
+
+    res.json({
+      success: true,
+      message: 'Database migration completed successfully'
+    });
+  } catch (error) {
+    console.error('❌ Database migration failed:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Database migration failed',
       error: error.message
     });
   }
