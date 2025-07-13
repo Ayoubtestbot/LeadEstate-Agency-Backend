@@ -1755,6 +1755,82 @@ app.get('/api/leads/:leadId/assignee-history', async (req, res) => {
   }
 });
 
+// Add passwords to existing real team members for authentication testing
+app.post('/api/add-passwords-to-real-team', async (req, res) => {
+  try {
+    console.log('🔐 Adding passwords to existing real team members...');
+
+    // Define passwords for your real team members
+    const teamPasswords = [
+      {
+        email: 'sophie.moreau@leadestate.com',
+        password: 'manager123',
+        role: 'manager'
+      },
+      {
+        email: 'antoine.dubois@leadestate.com',
+        password: 'superagent123',
+        role: 'super_agent'
+      },
+      {
+        email: 'emilie.rousseau@leadestate.com',
+        password: 'agent123',
+        role: 'agent'
+      },
+      {
+        email: 'julien.martin@leadestate.com',
+        password: 'agent123',
+        role: 'agent'
+      },
+      {
+        email: 'camille.laurent@leadestate.com',
+        password: 'agent123',
+        role: 'agent'
+      },
+      {
+        email: 'ayoubjada69@gmail.com',
+        password: 'agent123',
+        role: 'agent'
+      }
+    ];
+
+    // Update existing team members with passwords
+    for (const member of teamPasswords) {
+      try {
+        const result = await pool.query(
+          'UPDATE team_members SET password = $1 WHERE email = $2 RETURNING name, email, role',
+          [member.password, member.email]
+        );
+
+        if (result.rows.length > 0) {
+          console.log(`✅ Added password to: ${result.rows[0].name} (${result.rows[0].role})`);
+        } else {
+          console.log(`❌ Team member not found: ${member.email}`);
+        }
+      } catch (memberError) {
+        console.error(`❌ Failed to update ${member.email}:`, memberError.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Passwords added to real team members successfully',
+      teamMembers: teamPasswords.map(m => ({
+        email: m.email,
+        password: m.password,
+        role: m.role
+      }))
+    });
+  } catch (error) {
+    console.error('❌ Failed to add passwords to team members:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to add passwords to team members',
+      error: error.message
+    });
+  }
+});
+
 // Create demo users for testing different roles
 app.post('/api/create-demo-users', async (req, res) => {
   try {
