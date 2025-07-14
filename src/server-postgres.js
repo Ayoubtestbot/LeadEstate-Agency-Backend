@@ -2866,7 +2866,8 @@ app.get('/api/dashboard/all-data', async (req, res) => {
       leadsResult = await pool.query(`
         SELECT
           id, first_name, last_name, email, phone, whatsapp, source,
-          budget, notes, status, assigned_to, language, created_at, updated_at
+          budget, notes, status, assigned_to, language, interested_properties,
+          created_at, updated_at
         FROM leads
         ORDER BY created_at DESC
         LIMIT 100
@@ -2977,13 +2978,31 @@ app.get('/api/dashboard/all-data', async (req, res) => {
     };
 
     // Format leads data
-    const formattedLeads = leadsResult.rows.map(lead => ({
-      ...lead,
-      name: `${lead.first_name} ${lead.last_name}`.trim(),
-      assignedTo: lead.assigned_to,
-      createdAt: lead.created_at,
-      updatedAt: lead.updated_at
-    }));
+    const formattedLeads = leadsResult.rows.map(lead => {
+      let interestedProperties = [];
+      try {
+        interestedProperties = JSON.parse(lead.interested_properties || '[]');
+      } catch (error) {
+        interestedProperties = [];
+      }
+
+      return {
+        id: lead.id,
+        name: `${lead.first_name || ''} ${lead.last_name || ''}`.trim(),
+        email: lead.email,
+        phone: lead.phone,
+        source: lead.source,
+        budget: lead.budget,
+        notes: lead.notes,
+        status: lead.status,
+        assignedTo: lead.assigned_to,
+        interestedProperties: interestedProperties, // Include interested properties
+        createdAt: lead.created_at,
+        updatedAt: lead.updated_at,
+        created_at: lead.created_at, // Keep both for compatibility
+        updated_at: lead.updated_at
+      };
+    });
 
     // Format properties data
     const formattedProperties = propertiesResult.rows.map(property => ({
