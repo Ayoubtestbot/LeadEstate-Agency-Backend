@@ -94,17 +94,34 @@ app.use(express.urlencoded({ extended: true }));
 // Serve uploaded images statically
 app.use('/uploads', express.static('uploads'));
 
-// OPTIMIZED PostgreSQL connection with performance settings
+// OPTIMIZED PostgreSQL connection with better error handling for Railway
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-  // Performance optimizations for faster dashboard loading
-  max: 20,                      // Increased pool size
-  min: 2,                       // Keep minimum connections alive
-  idleTimeoutMillis: 60000,     // 60 seconds idle timeout
-  connectionTimeoutMillis: 10000, // 10 seconds connection timeout
-  acquireTimeoutMillis: 15000,  // 15 seconds to acquire connection
-  createTimeoutMillis: 10000,   // 10 seconds to create new connection
+  // Improved connection settings for Railway PostgreSQL
+  max: 10,                      // Reduced pool size for Railway limits
+  min: 1,                       // Keep minimum connections alive
+  idleTimeoutMillis: 30000,     // 30 seconds idle timeout (shorter)
+  connectionTimeoutMillis: 20000, // 20 seconds connection timeout
+  acquireTimeoutMillis: 20000,  // 20 seconds to acquire connection
+  createTimeoutMillis: 20000,   // 20 seconds to create new connection
+  // Additional Railway-specific settings
+  keepAlive: true,              // Keep connections alive
+  keepAliveInitialDelayMillis: 10000, // Initial delay for keep-alive
+});
+
+// Add connection error handling
+pool.on('error', (err) => {
+  console.error('❌ Unexpected database pool error:', err);
+  console.log('🔄 Pool will attempt to reconnect automatically');
+});
+
+pool.on('connect', (client) => {
+  console.log('✅ New database client connected');
+});
+
+pool.on('remove', (client) => {
+  console.log('🔌 Database client disconnected');
 });
 
 // Twilio client initialization
@@ -3352,6 +3369,35 @@ app.post('/api/whatsapp/welcome/:leadId', async (req, res) => {
       success: false,
       message: 'Failed to prepare WhatsApp message',
       error: error.message
+    });
+  }
+});
+
+// Health check endpoint with database connectivity
+app.get('/health', async (req, res) => {
+  try {
+    // Test database connection
+    const dbResult = await pool.query('SELECT NOW() as current_time');
+
+    res.json({
+      status: 'OK',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      database: {
+        connected: true,
+        server_time: dbResult.rows[0].current_time
+      }
+    });
+  } catch (error) {
+    console.error('❌ Health check database error:', error);
+    res.status(503).json({
+      status: 'ERROR',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      database: {
+        connected: false,
+        error: error.message
+      }
     });
   }
 });
