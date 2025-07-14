@@ -234,6 +234,7 @@ const initDatabase = async () => {
         assigned_to VARCHAR(255),
         language VARCHAR(10) DEFAULT 'fr',
         agency_id VARCHAR(255) DEFAULT 'default-agency',
+        interested_properties TEXT DEFAULT '[]',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
@@ -276,6 +277,12 @@ const initDatabase = async () => {
     await pool.query(`
       ALTER TABLE leads
       ADD COLUMN IF NOT EXISTS assigned_to VARCHAR(255)
+    `);
+
+    // Add interested_properties column to leads if it doesn't exist
+    await pool.query(`
+      ALTER TABLE leads
+      ADD COLUMN IF NOT EXISTS interested_properties TEXT DEFAULT '[]'
     `);
 
     // Add password column to team_members if it doesn't exist
