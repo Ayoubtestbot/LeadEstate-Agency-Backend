@@ -357,6 +357,12 @@ const initDatabase = async () => {
         ADD COLUMN IF NOT EXISTS image_url VARCHAR(500) DEFAULT ''
       `);
 
+      // Add images column for gallery support
+      await pool.query(`
+        ALTER TABLE properties
+        ADD COLUMN IF NOT EXISTS images TEXT DEFAULT '[]'
+      `);
+
       console.log('✅ Properties table schema updated safely (data preserved)');
     } catch (error) {
       console.log('⚠️ Properties table schema update failed:', error.message);
@@ -2562,10 +2568,17 @@ app.get('/api/analytics/budget-analysis', async (req, res) => {
 app.get('/api/properties', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM properties ORDER BY created_at DESC');
+
+    // Parse images JSON for each property
+    const propertiesWithImages = result.rows.map(property => ({
+      ...property,
+      images: property.images ? JSON.parse(property.images) : []
+    }));
+
     res.json({
       success: true,
-      data: result.rows,
-      count: result.rows.length
+      data: propertiesWithImages,
+      count: propertiesWithImages.length
     });
   } catch (error) {
     console.error('Error fetching properties:', error);
@@ -2611,6 +2624,9 @@ app.post('/api/properties', async (req, res) => {
     console.log('📝 Creating property with data:', req.body);
 
     const propertyData = req.body;
+    // Handle images array
+    const imagesJson = propertyData.images ? JSON.stringify(propertyData.images) : '[]';
+
     const newProperty = {
       id: generateId(),
       title: propertyData.title,
@@ -2621,6 +2637,7 @@ app.post('/api/properties', async (req, res) => {
       surface: propertyData.surface ? parseFloat(propertyData.surface) : null,
       description: propertyData.description,
       image_url: propertyData.image_url || '',
+      images: imagesJson,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
@@ -2628,13 +2645,13 @@ app.post('/api/properties', async (req, res) => {
     console.log('💾 Saving property to database:', newProperty);
 
     const result = await pool.query(`
-      INSERT INTO properties (id, title, type, price, address, city, surface, description, image_url, created_at, updated_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      INSERT INTO properties (id, title, type, price, address, city, surface, description, image_url, images, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       RETURNING *
     `, [
       newProperty.id, newProperty.title, newProperty.type, newProperty.price,
       newProperty.address, newProperty.city, newProperty.surface, newProperty.description,
-      newProperty.image_url, newProperty.created_at, newProperty.updated_at
+      newProperty.image_url, newProperty.images, newProperty.created_at, newProperty.updated_at
     ]);
 
     console.log('✅ Property saved successfully:', result.rows[0]);
@@ -2642,6 +2659,7 @@ app.post('/api/properties', async (req, res) => {
     // Format response for frontend compatibility
     const responseData = {
       ...result.rows[0],
+      images: result.rows[0].images ? JSON.parse(result.rows[0].images) : [],
       createdAt: result.rows[0].created_at,
       updatedAt: result.rows[0].updated_at
     };
@@ -2678,6 +2696,9 @@ app.put('/api/properties/:id', async (req, res) => {
     const { id } = req.params;
     const updateData = req.body;
 
+    // Handle images array - convert to JSON string for storage
+    const imagesJson = updateData.images ? JSON.stringify(updateData.images) : null;
+
     const result = await pool.query(`
       UPDATE properties SET
         title = COALESCE($2, title),
@@ -2688,13 +2709,14 @@ app.put('/api/properties/:id', async (req, res) => {
         surface = COALESCE($7, surface),
         description = COALESCE($8, description),
         image_url = COALESCE($9, image_url),
-        updated_at = $10
+        images = COALESCE($10, images),
+        updated_at = $11
       WHERE id = $1
       RETURNING *
     `, [
       id, updateData.title, updateData.type, updateData.price ? parseFloat(updateData.price) : null,
       updateData.address, updateData.city, updateData.surface ? parseFloat(updateData.surface) : null,
-      updateData.description, updateData.image_url, new Date().toISOString()
+      updateData.description, updateData.image_url, imagesJson, new Date().toISOString()
     ]);
 
     if (result.rows.length === 0) {
@@ -2706,9 +2728,15 @@ app.put('/api/properties/:id', async (req, res) => {
 
     console.log('✅ Property updated successfully:', result.rows[0]);
 
+    // Format response with parsed images
+    const responseData = {
+      ...result.rows[0],
+      images: result.rows[0].images ? JSON.parse(result.rows[0].images) : []
+    };
+
     res.json({
       success: true,
-      data: result.rows[0],
+      data: responseData,
       message: 'Property updated successfully'
     });
   } catch (error) {
