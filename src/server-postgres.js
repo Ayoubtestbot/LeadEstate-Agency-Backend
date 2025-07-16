@@ -3347,10 +3347,11 @@ app.use((error, req, res, next) => {
   });
 });
 
-// WhatsApp notification endpoint - FIXED DEPLOYMENT
+// WhatsApp notification endpoint - FORCE REDEPLOY 2025-07-16
 app.post('/api/whatsapp/welcome/:leadId', async (req, res) => {
   try {
     console.log('📱 WhatsApp welcome endpoint called for lead:', req.params.leadId);
+    console.log('🚀 Endpoint is working - deployment successful!');
     const { leadId } = req.params;
 
     // Get lead information
