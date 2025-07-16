@@ -547,6 +547,9 @@ ${agent.name}
         console.log('📧 Message SID:', twilioMessage.sid);
         console.log('📊 Status:', twilioMessage.status);
 
+        // Generate WhatsApp URL for manual opening if needed
+        const whatsappUrl = `https://wa.me/${phoneNumber.replace('+', '')}?text=${encodeURIComponent(message)}`;
+
         return {
           success: true,
           method: 'twilio_whatsapp',
@@ -554,7 +557,8 @@ ${agent.name}
           status: twilioMessage.status,
           agent: agent.name,
           leadName: lead.name,
-          phoneNumber: phoneNumber
+          phoneNumber: phoneNumber,
+          whatsappUrl: whatsappUrl
         };
 
       } catch (twilioError) {
