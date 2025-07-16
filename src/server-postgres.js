@@ -387,10 +387,11 @@ const generateId = () => {
   });
 };
 
-// WhatsApp welcome message function with Twilio
+// WhatsApp welcome message function with Twilio - UPDATED 2025-07-16 18:35
 async function sendWelcomeWhatsAppMessage(lead) {
   try {
     console.log('🔍 Looking for agent:', lead.assignedTo);
+    console.log('🚀 Function called - latest version with fallback logic');
 
     // Get agent information - try multiple approaches
     let agentResult = await pool.query('SELECT * FROM team_members WHERE name = $1', [lead.assignedTo]);
@@ -422,7 +423,7 @@ async function sendWelcomeWhatsAppMessage(lead) {
         email: 'agent@leadestate.com',
         phone: '+33123456789'
       };
-      console.log('🔄 Using fallback agent data');
+      console.log('🔄 Using fallback agent data:', agent.name);
     } else {
       console.log('✅ Agent found:', agent.name);
     }
