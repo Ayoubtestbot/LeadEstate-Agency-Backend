@@ -3329,25 +3329,7 @@ const reminderService = require('./services/reminderService');
 const auditService = require('./services/auditService');
 reminderService.startReminderScheduler();
 
-// Error handling
-app.use((req, res) => {
-  res.status(404).json({
-    error: 'Route not found',
-    message: `Cannot ${req.method} ${req.path}`,
-    timestamp: new Date().toISOString()
-  });
-});
-
-app.use((error, req, res, next) => {
-  console.error('API Error:', error);
-  res.status(500).json({
-    success: false,
-    message: 'Internal server error',
-    error: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'
-  });
-});
-
-// WhatsApp notification endpoint - FORCE REDEPLOY 2025-07-16
+// WhatsApp notification endpoint - MOVED BEFORE 404 HANDLER
 app.post('/api/whatsapp/welcome/:leadId', async (req, res) => {
   try {
     console.log('📱 WhatsApp welcome endpoint called for lead:', req.params.leadId);
@@ -3368,7 +3350,8 @@ app.post('/api/whatsapp/welcome/:leadId', async (req, res) => {
       id: lead.id,
       name: `${lead.first_name} ${lead.last_name}`.trim(),
       phone: lead.phone,
-      assignedTo: lead.assigned_to
+      assignedTo: lead.assigned_to,
+      language: lead.language
     };
 
     if (!leadData.phone) {
@@ -3401,6 +3384,24 @@ app.post('/api/whatsapp/welcome/:leadId', async (req, res) => {
       error: error.message
     });
   }
+});
+
+// Error handling
+app.use((req, res) => {
+  res.status(404).json({
+    error: 'Route not found',
+    message: `Cannot ${req.method} ${req.path}`,
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.use((error, req, res, next) => {
+  console.error('API Error:', error);
+  res.status(500).json({
+    success: false,
+    message: 'Internal server error',
+    error: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'
+  });
 });
 
 // Health check endpoint with database connectivity
