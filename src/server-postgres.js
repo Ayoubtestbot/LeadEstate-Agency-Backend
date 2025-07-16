@@ -3347,9 +3347,10 @@ app.use((error, req, res, next) => {
   });
 });
 
-// WhatsApp notification endpoint
+// WhatsApp notification endpoint - FIXED DEPLOYMENT
 app.post('/api/whatsapp/welcome/:leadId', async (req, res) => {
   try {
+    console.log('📱 WhatsApp welcome endpoint called for lead:', req.params.leadId);
     const { leadId } = req.params;
 
     // Get lead information
