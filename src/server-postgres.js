@@ -3471,5 +3471,3 @@ app.listen(PORT, () => {
   console.log(`📡 API Status: http://localhost:${PORT}/api/status`);
   console.log(`🔗 Property linking endpoints: ENABLED`);
 });
-/ /   F o r c e   d e p l o y m e n t   0 7 / 1 6 / 2 0 2 5   1 8 : 5 4 : 4 2  
- 
