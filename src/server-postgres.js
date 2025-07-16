@@ -390,13 +390,41 @@ const generateId = () => {
 // WhatsApp welcome message function with Twilio
 async function sendWelcomeWhatsAppMessage(lead) {
   try {
-    // Get agent information
-    const agentResult = await pool.query('SELECT * FROM team_members WHERE name = $1', [lead.assignedTo]);
-    const agent = agentResult.rows[0];
+    console.log('🔍 Looking for agent:', lead.assignedTo);
 
+    // Get agent information - try multiple approaches
+    let agentResult = await pool.query('SELECT * FROM team_members WHERE name = $1', [lead.assignedTo]);
+    let agent = agentResult.rows[0];
+
+    // If not found by exact name, try case-insensitive search
     if (!agent) {
-      console.log('⚠️ Agent not found for WhatsApp message');
-      return { success: false, message: 'Agent not found' };
+      console.log('🔍 Trying case-insensitive search...');
+      agentResult = await pool.query('SELECT * FROM team_members WHERE LOWER(name) = LOWER($1)', [lead.assignedTo]);
+      agent = agentResult.rows[0];
+    }
+
+    // If still not found, try partial match
+    if (!agent) {
+      console.log('🔍 Trying partial name match...');
+      agentResult = await pool.query('SELECT * FROM team_members WHERE name ILIKE $1', [`%${lead.assignedTo}%`]);
+      agent = agentResult.rows[0];
+    }
+
+    // If still not found, get all team members for debugging
+    if (!agent) {
+      console.log('🔍 Agent not found, listing all team members...');
+      const allAgents = await pool.query('SELECT name FROM team_members LIMIT 10');
+      console.log('📋 Available agents:', allAgents.rows.map(a => a.name));
+
+      // Use a fallback agent or create a generic response
+      agent = {
+        name: lead.assignedTo || 'Your Agent',
+        email: 'agent@leadestate.com',
+        phone: '+33123456789'
+      };
+      console.log('🔄 Using fallback agent data');
+    } else {
+      console.log('✅ Agent found:', agent.name);
     }
 
     // Determine language (default to French if not specified)
