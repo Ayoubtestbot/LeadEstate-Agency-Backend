@@ -314,43 +314,75 @@ const initDatabase = async () => {
       ADD COLUMN IF NOT EXISTS address TEXT
     `);
 
-    console.log('✅ Database schema updated with city and address fields');
+    // MIGRATION: Add status column to properties table if it doesn't exist
+    await pool.query(`
+      ALTER TABLE properties
+      ADD COLUMN IF NOT EXISTS status VARCHAR(255) DEFAULT 'available'
+    `);
 
-    // PERFORMANCE: Add database indexes for faster queries
+    // MIGRATION: Add missing columns to properties table
+    await pool.query(`
+      ALTER TABLE properties
+      ADD COLUMN IF NOT EXISTS property_type VARCHAR(255)
+    `);
+
+    await pool.query(`
+      ALTER TABLE properties
+      ADD COLUMN IF NOT EXISTS main_image TEXT
+    `);
+
+    await pool.query(`
+      ALTER TABLE properties
+      ADD COLUMN IF NOT EXISTS images TEXT DEFAULT '[]'
+    `);
+
+    console.log('✅ Database schema updated with city, address, and properties columns');
+
+    // PERFORMANCE: Add database indexes for faster queries (with error handling)
     console.log('🚀 Creating database indexes for performance...');
 
-    // Index on leads table for common queries
-    await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_leads_created_at ON leads(created_at DESC)
-    `);
+    try {
+      // Index on leads table for common queries
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_leads_created_at ON leads(created_at DESC)
+      `);
 
-    await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status)
-    `);
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status)
+      `);
 
-    await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_leads_assigned_to ON leads(assigned_to)
-    `);
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_leads_assigned_to ON leads(assigned_to)
+      `);
 
-    await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_leads_agency_id ON leads(agency_id)
-    `);
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_leads_agency_id ON leads(agency_id)
+      `);
 
-    // Index on properties table
-    await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_properties_created_at ON properties(created_at DESC)
-    `);
+      // Index on properties table
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_properties_created_at ON properties(created_at DESC)
+      `);
 
-    await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_properties_status ON properties(status)
-    `);
+      // Try to create properties status index with error handling
+      try {
+        await pool.query(`
+          CREATE INDEX IF NOT EXISTS idx_properties_status ON properties(status)
+        `);
+      } catch (statusIndexError) {
+        console.warn('⚠️ Could not create properties status index (column may not exist yet):', statusIndexError.message);
+      }
 
-    // Index on team_members table
-    await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_team_members_status ON team_members(status)
-    `);
+      // Index on team_members table
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_team_members_status ON team_members(status)
+      `);
 
-    console.log('✅ Database indexes created for optimal performance');
+      console.log('✅ Database indexes created for optimal performance');
+    } catch (indexError) {
+      console.warn('⚠️ Some database indexes could not be created:', indexError.message);
+      console.log('📝 This is not critical - the application will still work');
+    }
 
     // Add city field that was missing from original schema
     await pool.query(`
