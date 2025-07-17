@@ -432,6 +432,67 @@ const initDatabase = async () => {
 
     console.log('✅ Team members cleanup completed - only 6 real members remain');
 
+    // CLEANUP: Delete leads assigned to demo/test users
+    console.log('🧹 Cleaning up leads assigned to demo/test users...');
+
+    // Get count of leads before cleanup
+    const beforeCleanup = await pool.query('SELECT COUNT(*) as count FROM leads');
+    console.log(`📊 Total leads before cleanup: ${beforeCleanup.rows[0].count}`);
+
+    // Delete leads assigned to demo/test users (not in the real team member list)
+    const deleteResult = await pool.query(`
+      DELETE FROM leads
+      WHERE assigned_to IS NOT NULL
+      AND assigned_to NOT IN (
+        'Sophie Moreau',
+        'Antoine Dubois',
+        'Emilie Rousseau',
+        'Julien Martin',
+        'Camille Laurent',
+        'Ayoub Jada'
+      )
+      AND assigned_to NOT LIKE '%@%'
+    `);
+
+    // Also delete leads assigned to demo email addresses
+    const deleteEmailResult = await pool.query(`
+      DELETE FROM leads
+      WHERE assigned_to IN (
+        'manager@leadestate.com',
+        'superagent@leadestate.com',
+        'agent@leadestate.com',
+        'sarah@agency.com',
+        'mike@agency.com',
+        'emma@agency.com',
+        'Sarah Johnson',
+        'Mike Chen',
+        'Emily Davis',
+        'Michael Chen',
+        'Emma Wilson',
+        'Agent Smith',
+        'Agent Johnson',
+        'Agent Brown'
+      )
+    `);
+
+    // Also clean up leads with agent names starting with 'agent' or 'Agent'
+    const deleteAgentResult = await pool.query(`
+      DELETE FROM leads
+      WHERE assigned_to LIKE 'agent%'
+      OR assigned_to LIKE 'Agent%'
+    `);
+
+    // Get count after cleanup
+    const afterCleanup = await pool.query('SELECT COUNT(*) as count FROM leads');
+    const deletedCount = beforeCleanup.rows[0].count - afterCleanup.rows[0].count;
+
+    console.log(`🗑️ Deleted ${deleteResult.rowCount} leads assigned to demo users`);
+    console.log(`🗑️ Deleted ${deleteEmailResult.rowCount} leads assigned to demo emails`);
+    console.log(`🗑️ Deleted ${deleteAgentResult.rowCount} leads assigned to generic agents`);
+    console.log(`📊 Total leads deleted: ${deletedCount}`);
+    console.log(`📊 Total leads remaining: ${afterCleanup.rows[0].count}`);
+    console.log('✅ Leads cleanup completed - only leads assigned to real team members remain');
+
     // PERFORMANCE: Add database indexes for faster queries (with error handling)
     console.log('🚀 Creating database indexes for performance...');
 
@@ -2315,6 +2376,135 @@ app.post('/api/create-demo-users', async (req, res) => {
     });
   }
 }); */
+
+// CLEANUP: Manual endpoint to clean up leads assigned to demo/test users
+app.post('/api/cleanup-demo-leads', async (req, res) => {
+  try {
+    console.log('🧹 Manual cleanup: Removing leads assigned to demo/test users...');
+
+    // Get count of leads before cleanup
+    const beforeCleanup = await pool.query('SELECT COUNT(*) as count FROM leads');
+    console.log(`📊 Total leads before cleanup: ${beforeCleanup.rows[0].count}`);
+
+    // Get list of leads that will be deleted for logging
+    const leadsToDelete = await pool.query(`
+      SELECT id, name, assigned_to, created_at
+      FROM leads
+      WHERE (
+        assigned_to IS NOT NULL
+        AND assigned_to NOT IN (
+          'Sophie Moreau',
+          'Antoine Dubois',
+          'Emilie Rousseau',
+          'Julien Martin',
+          'Camille Laurent',
+          'Ayoub Jada'
+        )
+        AND assigned_to NOT LIKE '%@%'
+      ) OR assigned_to IN (
+        'manager@leadestate.com',
+        'superagent@leadestate.com',
+        'agent@leadestate.com',
+        'sarah@agency.com',
+        'mike@agency.com',
+        'emma@agency.com',
+        'Sarah Johnson',
+        'Mike Chen',
+        'Emily Davis',
+        'Michael Chen',
+        'Emma Wilson',
+        'Agent Smith',
+        'Agent Johnson',
+        'Agent Brown'
+      ) OR assigned_to LIKE 'agent%'
+      OR assigned_to LIKE 'Agent%'
+    `);
+
+    console.log(`🔍 Found ${leadsToDelete.rows.length} leads assigned to demo/test users:`);
+    leadsToDelete.rows.forEach(lead => {
+      console.log(`  - ${lead.name} (assigned to: ${lead.assigned_to})`);
+    });
+
+    // Delete leads assigned to demo/test users
+    const deleteResult1 = await pool.query(`
+      DELETE FROM leads
+      WHERE assigned_to IS NOT NULL
+      AND assigned_to NOT IN (
+        'Sophie Moreau',
+        'Antoine Dubois',
+        'Emilie Rousseau',
+        'Julien Martin',
+        'Camille Laurent',
+        'Ayoub Jada'
+      )
+      AND assigned_to NOT LIKE '%@%'
+    `);
+
+    // Delete leads assigned to demo email addresses
+    const deleteResult2 = await pool.query(`
+      DELETE FROM leads
+      WHERE assigned_to IN (
+        'manager@leadestate.com',
+        'superagent@leadestate.com',
+        'agent@leadestate.com',
+        'sarah@agency.com',
+        'mike@agency.com',
+        'emma@agency.com',
+        'Sarah Johnson',
+        'Mike Chen',
+        'Emily Davis',
+        'Michael Chen',
+        'Emma Wilson',
+        'Agent Smith',
+        'Agent Johnson',
+        'Agent Brown'
+      )
+    `);
+
+    // Delete leads with generic agent names
+    const deleteResult3 = await pool.query(`
+      DELETE FROM leads
+      WHERE assigned_to LIKE 'agent%'
+      OR assigned_to LIKE 'Agent%'
+    `);
+
+    // Get count after cleanup
+    const afterCleanup = await pool.query('SELECT COUNT(*) as count FROM leads');
+    const deletedCount = beforeCleanup.rows[0].count - afterCleanup.rows[0].count;
+
+    const result = {
+      success: true,
+      message: 'Demo leads cleanup completed successfully',
+      statistics: {
+        totalLeadsBefore: parseInt(beforeCleanup.rows[0].count),
+        totalLeadsAfter: parseInt(afterCleanup.rows[0].count),
+        totalDeleted: deletedCount,
+        deletedByCategory: {
+          demoUsers: deleteResult1.rowCount,
+          demoEmails: deleteResult2.rowCount,
+          genericAgents: deleteResult3.rowCount
+        }
+      },
+      deletedLeads: leadsToDelete.rows.map(lead => ({
+        id: lead.id,
+        name: lead.name,
+        assignedTo: lead.assigned_to,
+        createdAt: lead.created_at
+      }))
+    };
+
+    console.log('✅ Manual cleanup completed:', result.statistics);
+    res.json(result);
+
+  } catch (error) {
+    console.error('❌ Error during manual cleanup:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to cleanup demo leads',
+      error: error.message
+    });
+  }
+});
 
 // Simple login endpoint for demo users
 app.post('/api/auth/login', async (req, res) => {
