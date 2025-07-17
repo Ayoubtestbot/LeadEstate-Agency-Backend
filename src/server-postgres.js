@@ -316,6 +316,42 @@ const initDatabase = async () => {
 
     console.log('✅ Database schema updated with city and address fields');
 
+    // PERFORMANCE: Add database indexes for faster queries
+    console.log('🚀 Creating database indexes for performance...');
+
+    // Index on leads table for common queries
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_leads_created_at ON leads(created_at DESC)
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status)
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_leads_assigned_to ON leads(assigned_to)
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_leads_agency_id ON leads(agency_id)
+    `);
+
+    // Index on properties table
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_properties_created_at ON properties(created_at DESC)
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_properties_status ON properties(status)
+    `);
+
+    // Index on team_members table
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_team_members_status ON team_members(status)
+    `);
+
+    console.log('✅ Database indexes created for optimal performance');
+
     // Add city field that was missing from original schema
     await pool.query(`
       ALTER TABLE leads
@@ -1399,10 +1435,120 @@ app.post('/api/leads/add-samples', async (req, res) => {
   }
 });
 
-// Leads endpoints
+// PERFORMANCE: High-speed dashboard endpoint - returns all data in one optimized call
+app.get('/api/dashboard', async (req, res) => {
+  try {
+    console.log('🚀 High-performance dashboard endpoint called');
+    const startTime = Date.now();
+
+    // Execute all queries in parallel with optimized queries and limits
+    const [leadsResult, propertiesResult, teamResult] = await Promise.all([
+      // Optimized leads query with limit and essential fields only
+      pool.query(`
+        SELECT id, first_name, last_name, email, phone, city, address, source, budget, notes, status, assigned_to,
+               interested_properties, created_at, updated_at
+        FROM leads
+        ORDER BY created_at DESC
+        LIMIT 100
+      `),
+
+      // Optimized properties query with limit
+      pool.query(`
+        SELECT id, title, price, location, bedrooms, bathrooms, area, property_type, status,
+               main_image, images, created_at, updated_at
+        FROM properties
+        ORDER BY created_at DESC
+        LIMIT 50
+      `),
+
+      // Team members query (usually small dataset)
+      pool.query(`
+        SELECT id, name, email, phone, role, department, status, joined_at, created_at, updated_at
+        FROM team_members
+        WHERE status = 'active'
+        ORDER BY name ASC
+      `)
+    ]);
+
+    // Transform leads data efficiently
+    const transformedLeads = leadsResult.rows.map(lead => ({
+      id: lead.id,
+      name: `${lead.first_name || ''} ${lead.last_name || ''}`.trim(),
+      email: lead.email,
+      phone: lead.phone,
+      city: lead.city,
+      address: lead.address,
+      source: lead.source,
+      budget: lead.budget,
+      notes: lead.notes,
+      status: lead.status,
+      assignedTo: lead.assigned_to,
+      interestedProperties: lead.interested_properties ? JSON.parse(lead.interested_properties) : [],
+      createdAt: lead.created_at,
+      updatedAt: lead.updated_at,
+      created_at: lead.created_at,
+      updated_at: lead.updated_at
+    }));
+
+    // Transform properties data efficiently
+    const transformedProperties = propertiesResult.rows.map(property => ({
+      id: property.id,
+      title: property.title,
+      price: property.price,
+      location: property.location,
+      city: property.location, // For compatibility
+      bedrooms: property.bedrooms,
+      bathrooms: property.bathrooms,
+      area: property.area,
+      propertyType: property.property_type,
+      status: property.status,
+      mainImage: property.main_image,
+      images: property.images ? JSON.parse(property.images) : [],
+      createdAt: property.created_at,
+      updatedAt: property.updated_at,
+      created_at: property.created_at,
+      updated_at: property.updated_at
+    }));
+
+    const endTime = Date.now();
+    const queryTime = endTime - startTime;
+
+    console.log(`✅ Dashboard data loaded in ${queryTime}ms`);
+    console.log(`📊 Data counts: ${transformedLeads.length} leads, ${transformedProperties.length} properties, ${teamResult.rows.length} team members`);
+
+    res.json({
+      success: true,
+      data: {
+        leads: transformedLeads,
+        properties: transformedProperties,
+        team: teamResult.rows
+      },
+      performance: {
+        queryTime: queryTime,
+        timestamp: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    console.error('Error in dashboard endpoint:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error loading dashboard data',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Database error'
+    });
+  }
+});
+
+// Leads endpoints (optimized with limits)
 app.get('/api/leads', async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM leads ORDER BY created_at DESC');
+    const limit = req.query.limit ? parseInt(req.query.limit) : 100;
+    const result = await pool.query(`
+      SELECT id, first_name, last_name, email, phone, city, address, source, budget, notes, status, assigned_to,
+             interested_properties, created_at, updated_at
+      FROM leads
+      ORDER BY created_at DESC
+      LIMIT $1
+    `, [limit]);
 
     // Format data for frontend compatibility
     const formattedLeads = result.rows.map(lead => {
@@ -1418,6 +1564,8 @@ app.get('/api/leads', async (req, res) => {
         name: `${lead.first_name || ''} ${lead.last_name || ''}`.trim(),
         email: lead.email,
         phone: lead.phone,
+        city: lead.city,
+        address: lead.address,
         source: lead.source,
         budget: lead.budget,
         notes: lead.notes,
