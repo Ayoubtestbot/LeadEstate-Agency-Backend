@@ -1443,22 +1443,20 @@ app.get('/api/dashboard', async (req, res) => {
 
     // Execute all queries in parallel with optimized queries and limits
     const [leadsResult, propertiesResult, teamResult] = await Promise.all([
-      // Optimized leads query with limit and essential fields only
+      // Optimized leads query with ALL leads (no limit for complete data)
       pool.query(`
         SELECT id, first_name, last_name, email, phone, city, address, source, budget, notes, status, assigned_to,
                interested_properties, created_at, updated_at
         FROM leads
         ORDER BY created_at DESC
-        LIMIT 100
       `),
 
-      // Optimized properties query with limit
+      // Optimized properties query with ALL properties (no limit for complete data)
       pool.query(`
         SELECT id, title, price, location, bedrooms, bathrooms, area, property_type, status,
                main_image, images, created_at, updated_at
         FROM properties
         ORDER BY created_at DESC
-        LIMIT 50
       `),
 
       // Team members query (usually small dataset)
@@ -1541,14 +1539,27 @@ app.get('/api/dashboard', async (req, res) => {
 // Leads endpoints (optimized with limits)
 app.get('/api/leads', async (req, res) => {
   try {
-    const limit = req.query.limit ? parseInt(req.query.limit) : 100;
-    const result = await pool.query(`
-      SELECT id, first_name, last_name, email, phone, city, address, source, budget, notes, status, assigned_to,
-             interested_properties, created_at, updated_at
-      FROM leads
-      ORDER BY created_at DESC
-      LIMIT $1
-    `, [limit]);
+    // Check if limit is specifically requested, otherwise return all leads
+    const limit = req.query.limit ? parseInt(req.query.limit) : null;
+
+    let result;
+    if (limit) {
+      result = await pool.query(`
+        SELECT id, first_name, last_name, email, phone, city, address, source, budget, notes, status, assigned_to,
+               interested_properties, created_at, updated_at
+        FROM leads
+        ORDER BY created_at DESC
+        LIMIT $1
+      `, [limit]);
+    } else {
+      // Return ALL leads for complete data view
+      result = await pool.query(`
+        SELECT id, first_name, last_name, email, phone, city, address, source, budget, notes, status, assigned_to,
+               interested_properties, created_at, updated_at
+        FROM leads
+        ORDER BY created_at DESC
+      `);
+    }
 
     // Format data for frontend compatibility
     const formattedLeads = result.rows.map(lead => {
