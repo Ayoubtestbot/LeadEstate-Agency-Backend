@@ -302,6 +302,28 @@ const initDatabase = async () => {
       ADD COLUMN IF NOT EXISTS interested_properties TEXT DEFAULT '[]'
     `);
 
+    // Add city field that was missing from original schema
+    await pool.query(`
+      ALTER TABLE leads
+      ADD COLUMN IF NOT EXISTS city VARCHAR(255)
+    `);
+
+    // Add address field for complete lead information
+    await pool.query(`
+      ALTER TABLE leads
+      ADD COLUMN IF NOT EXISTS address TEXT
+    `);
+
+    console.log('✅ Database schema updated with city and address fields');
+
+    // Add city field that was missing from original schema
+    await pool.query(`
+      ALTER TABLE leads
+      ADD COLUMN IF NOT EXISTS city VARCHAR(255)
+    `);
+
+    console.log('✅ Database schema updated with city field');
+
     // Add password column to team_members if it doesn't exist
     await pool.query(`
       ALTER TABLE team_members
@@ -1444,6 +1466,8 @@ app.post('/api/leads', async (req, res) => {
       email: leadData.email || '',
       phone: leadData.phone || '',
       whatsapp: leadData.phone || '', // Use phone as whatsapp for now
+      city: leadData.city || '', // Include city field
+      address: leadData.address || '', // Include address field
       source: leadData.source || 'website',
       budget: leadData.budget ? parseFloat(leadData.budget) : null,
       notes: leadData.notes || '',
@@ -1458,12 +1482,12 @@ app.post('/api/leads', async (req, res) => {
     console.log('💾 Saving lead to database:', newLead);
 
     const result = await pool.query(`
-      INSERT INTO leads (id, first_name, last_name, email, phone, whatsapp, source, budget, notes, status, assigned_to, language, agency_id, created_at, updated_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+      INSERT INTO leads (id, first_name, last_name, email, phone, whatsapp, city, address, source, budget, notes, status, assigned_to, language, agency_id, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
       RETURNING *
     `, [
       newLead.id, newLead.first_name, newLead.last_name, newLead.email, newLead.phone,
-      newLead.whatsapp, newLead.source, newLead.budget, newLead.notes,
+      newLead.whatsapp, newLead.city, newLead.address, newLead.source, newLead.budget, newLead.notes,
       newLead.status, newLead.assigned_to, newLead.language, newLead.agency_id, newLead.created_at, newLead.updated_at
     ]);
 
@@ -1475,6 +1499,8 @@ app.post('/api/leads', async (req, res) => {
       name: `${result.rows[0].first_name} ${result.rows[0].last_name}`.trim(),
       email: result.rows[0].email,
       phone: result.rows[0].phone,
+      city: result.rows[0].city, // Include city in response
+      address: result.rows[0].address, // Include address in response
       source: result.rows[0].source,
       budget: result.rows[0].budget,
       notes: result.rows[0].notes,
@@ -1563,17 +1589,19 @@ app.put('/api/leads/:id', async (req, res) => {
         email = COALESCE($4, email),
         phone = COALESCE($5, phone),
         whatsapp = COALESCE($6, whatsapp),
-        source = COALESCE($7, source),
-        budget = COALESCE($8, budget),
-        notes = COALESCE($9, notes),
-        status = COALESCE($10, status),
-        assigned_to = COALESCE($11, assigned_to),
-        updated_at = $12
+        city = COALESCE($7, city),
+        address = COALESCE($8, address),
+        source = COALESCE($9, source),
+        budget = COALESCE($10, budget),
+        notes = COALESCE($11, notes),
+        status = COALESCE($12, status),
+        assigned_to = COALESCE($13, assigned_to),
+        updated_at = $14
       WHERE id = $1
       RETURNING *
     `, [
       id, firstName, lastName, updateData.email, updateData.phone,
-      updateData.phone, updateData.source, updateData.budget ? parseFloat(updateData.budget) : null,
+      updateData.phone, updateData.city, updateData.address, updateData.source, updateData.budget ? parseFloat(updateData.budget) : null,
       updateData.notes, updateData.status, updateData.assignedTo, new Date().toISOString()
     ]);
 
@@ -1631,6 +1659,8 @@ app.put('/api/leads/:id', async (req, res) => {
       name: `${result.rows[0].first_name || ''} ${result.rows[0].last_name || ''}`.trim(),
       email: result.rows[0].email,
       phone: result.rows[0].phone,
+      city: result.rows[0].city, // Include city in response
+      address: result.rows[0].address, // Include address in response
       source: result.rows[0].source,
       budget: result.rows[0].budget,
       notes: result.rows[0].notes,
