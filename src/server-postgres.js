@@ -338,6 +338,100 @@ const initDatabase = async () => {
 
     console.log('✅ Database schema updated with city, address, and properties columns');
 
+    // CLEANUP: Ensure only the 6 real team members exist
+    console.log('🧹 Cleaning up team members - keeping only the 6 real team members...');
+
+    // Delete all team members except the 6 real ones
+    await pool.query(`
+      DELETE FROM team_members
+      WHERE email NOT IN (
+        'sophie.moreau@leadestate.com',
+        'antoine.dubois@leadestate.com',
+        'emilie.rousseau@leadestate.com',
+        'julien.martin@leadestate.com',
+        'camille.laurent@leadestate.com',
+        'ayoubjada69@gmail.com'
+      )
+    `);
+
+    // Ensure the 6 real team members exist with correct data
+    const realTeamMembers = [
+      {
+        name: 'Sophie Moreau',
+        email: 'sophie.moreau@leadestate.com',
+        phone: '+33 1 23 45 67 89',
+        role: 'manager',
+        department: 'Management'
+      },
+      {
+        name: 'Antoine Dubois',
+        email: 'antoine.dubois@leadestate.com',
+        phone: '+33 1 23 45 67 90',
+        role: 'super_agent',
+        department: 'Sales'
+      },
+      {
+        name: 'Emilie Rousseau',
+        email: 'emilie.rousseau@leadestate.com',
+        phone: '+33 1 23 45 67 91',
+        role: 'agent',
+        department: 'Sales'
+      },
+      {
+        name: 'Julien Martin',
+        email: 'julien.martin@leadestate.com',
+        phone: '+33 1 23 45 67 92',
+        role: 'agent',
+        department: 'Sales'
+      },
+      {
+        name: 'Camille Laurent',
+        email: 'camille.laurent@leadestate.com',
+        phone: '+33 1 23 45 67 93',
+        role: 'agent',
+        department: 'Sales'
+      },
+      {
+        name: 'Ayoub Jada',
+        email: 'ayoubjada69@gmail.com',
+        phone: '+212 6 30 20 82 12',
+        role: 'manager',
+        department: 'Management'
+      }
+    ];
+
+    for (const member of realTeamMembers) {
+      try {
+        await pool.query(`
+          INSERT INTO team_members (id, name, email, phone, role, department, status, password, joined_at, created_at, updated_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          ON CONFLICT (email) DO UPDATE SET
+            name = EXCLUDED.name,
+            phone = EXCLUDED.phone,
+            role = EXCLUDED.role,
+            department = EXCLUDED.department,
+            updated_at = EXCLUDED.updated_at
+        `, [
+          generateId(),
+          member.name,
+          member.email,
+          member.phone,
+          member.role,
+          member.department,
+          'active',
+          '$2b$10$defaultpasswordhash', // Default password hash
+          new Date().toISOString(),
+          new Date().toISOString(),
+          new Date().toISOString()
+        ]);
+        console.log(`✅ Ensured team member exists: ${member.name}`);
+      } catch (memberError) {
+        console.log(`ℹ️ Team member already exists: ${member.name}`);
+      }
+    }
+
+    console.log('✅ Team members cleanup completed - only 6 real members remain');
+
     // PERFORMANCE: Add database indexes for faster queries (with error handling)
     console.log('🚀 Creating database indexes for performance...');
 
@@ -2121,7 +2215,8 @@ app.post('/api/add-passwords-to-real-team', async (req, res) => {
   }
 });
 
-// Create demo users for testing different roles
+// DISABLED: Create demo users for testing different roles - using only real team members
+/*
 app.post('/api/create-demo-users', async (req, res) => {
   try {
     console.log('👥 Creating demo users for role testing...');
@@ -2219,7 +2314,7 @@ app.post('/api/create-demo-users', async (req, res) => {
       error: error.message
     });
   }
-});
+}); */
 
 // Simple login endpoint for demo users
 app.post('/api/auth/login', async (req, res) => {
