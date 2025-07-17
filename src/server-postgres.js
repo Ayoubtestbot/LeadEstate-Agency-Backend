@@ -1441,6 +1441,12 @@ app.get('/api/dashboard', async (req, res) => {
     console.log('🚀 High-performance dashboard endpoint called');
     const startTime = Date.now();
 
+    // Add cache headers for faster subsequent requests
+    res.set({
+      'Cache-Control': 'no-cache, must-revalidate',
+      'X-Timestamp': new Date().toISOString()
+    });
+
     // Execute all queries in parallel with optimized queries and limits
     const [leadsResult, propertiesResult, teamResult] = await Promise.all([
       // Optimized leads query with ALL leads (no limit for complete data)
