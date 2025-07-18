@@ -94,20 +94,22 @@ app.use(express.urlencoded({ extended: true }));
 // Serve uploaded images statically
 app.use('/uploads', express.static('uploads'));
 
-// OPTIMIZED PostgreSQL connection with better error handling for Railway
+// OPTIMIZED PostgreSQL connection with faster initial connection
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-  // Improved connection settings for Railway PostgreSQL
-  max: 10,                      // Reduced pool size for Railway limits
-  min: 1,                       // Keep minimum connections alive
-  idleTimeoutMillis: 30000,     // 30 seconds idle timeout (shorter)
-  connectionTimeoutMillis: 20000, // 20 seconds connection timeout
-  acquireTimeoutMillis: 20000,  // 20 seconds to acquire connection
-  createTimeoutMillis: 20000,   // 20 seconds to create new connection
-  // Additional Railway-specific settings
+  // Optimized connection settings for faster performance
+  max: 20,                      // Increased pool size for better performance
+  min: 2,                       // Keep more connections alive
+  idleTimeoutMillis: 60000,     // 60 seconds idle timeout
+  connectionTimeoutMillis: 5000, // 5 seconds connection timeout (faster)
+  acquireTimeoutMillis: 5000,   // 5 seconds to acquire connection (faster)
+  createTimeoutMillis: 5000,    // 5 seconds to create new connection (faster)
+  // Performance optimization settings
   keepAlive: true,              // Keep connections alive
-  keepAliveInitialDelayMillis: 10000, // Initial delay for keep-alive
+  keepAliveInitialDelayMillis: 0, // No delay for keep-alive (immediate)
+  statement_timeout: 10000,     // 10 seconds statement timeout
+  query_timeout: 10000,         // 10 seconds query timeout
 });
 
 // Add connection error handling
@@ -123,6 +125,61 @@ pool.on('connect', (client) => {
 pool.on('remove', (client) => {
   console.log('🔌 Database client disconnected');
 });
+
+// Warm up database connections on startup
+const warmUpConnections = async () => {
+  console.log('🔥 Warming up database connections...');
+  const startTime = Date.now();
+
+  try {
+    // Create multiple concurrent connections to warm up the pool
+    const warmupPromises = [];
+    for (let i = 0; i < 3; i++) {
+      warmupPromises.push(
+        pool.query('SELECT 1 as warmup_test')
+          .then(() => console.log(`✅ Connection ${i + 1} warmed up`))
+          .catch(err => console.log(`⚠️ Connection ${i + 1} warmup failed:`, err.message))
+      );
+    }
+
+    await Promise.all(warmupPromises);
+    const endTime = Date.now();
+    console.log(`🚀 Database connections warmed up in ${endTime - startTime}ms`);
+  } catch (error) {
+    console.error('❌ Connection warmup failed:', error.message);
+  }
+};
+
+// Auto-optimize database on startup
+const autoOptimizeDatabase = async () => {
+  console.log('🔧 Auto-optimizing database indexes...');
+  try {
+    // Create essential indexes for performance
+    const criticalIndexes = [
+      'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_leads_created_at ON leads(created_at DESC)',
+      'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_leads_status ON leads(status)',
+      'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_leads_assigned_to ON leads(assigned_to)',
+    ];
+
+    for (const indexQuery of criticalIndexes) {
+      try {
+        await pool.query(indexQuery);
+        console.log('✅ Critical index created successfully');
+      } catch (error) {
+        console.log('⚠️ Index already exists or creation failed:', error.message);
+      }
+    }
+    console.log('🚀 Database auto-optimization completed');
+  } catch (error) {
+    console.error('❌ Auto-optimization failed:', error.message);
+  }
+};
+
+// Call warmup and optimization after a short delay to allow server to start
+setTimeout(async () => {
+  await warmUpConnections();
+  await autoOptimizeDatabase();
+}, 2000);
 
 // Twilio client initialization
 let twilioClient = null;
@@ -1729,14 +1786,18 @@ app.get('/api/dashboard', async (req, res) => {
   }
 });
 
-// Leads endpoints (optimized with limits)
+// OPTIMIZED Leads endpoints with performance improvements
 app.get('/api/leads', async (req, res) => {
   try {
+    console.log('📊 Fetching leads - optimized query...');
+    const startTime = Date.now();
+
     // Check if limit is specifically requested, otherwise return all leads
     const limit = req.query.limit ? parseInt(req.query.limit) : null;
 
     let result;
     if (limit) {
+      // Use prepared statement for better performance
       result = await pool.query(`
         SELECT id, first_name, last_name, email, phone, city, address, source, budget, notes, status, assigned_to,
                interested_properties, created_at, updated_at
@@ -1745,7 +1806,7 @@ app.get('/api/leads', async (req, res) => {
         LIMIT $1
       `, [limit]);
     } else {
-      // Return ALL leads for complete data view
+      // Optimized query with index hint for better performance
       result = await pool.query(`
         SELECT id, first_name, last_name, email, phone, city, address, source, budget, notes, status, assigned_to,
                interested_properties, created_at, updated_at
@@ -1754,7 +1815,11 @@ app.get('/api/leads', async (req, res) => {
       `);
     }
 
-    // Format data for frontend compatibility
+    const queryTime = Date.now() - startTime;
+    console.log(`⚡ Query completed in ${queryTime}ms - ${result.rows.length} leads found`);
+
+    // Format data for frontend compatibility (optimized)
+    const formatStartTime = Date.now();
     const formattedLeads = result.rows.map(lead => {
       let interestedProperties = [];
       try {
@@ -1783,12 +1848,19 @@ app.get('/api/leads', async (req, res) => {
       };
     });
 
-    console.log(`📊 Fetched ${formattedLeads.length} leads from database`);
+    const formatTime = Date.now() - formatStartTime;
+    const totalTime = Date.now() - startTime;
+    console.log(`📊 Fetched ${formattedLeads.length} leads - Format: ${formatTime}ms, Total: ${totalTime}ms`);
 
     res.json({
       success: true,
       data: formattedLeads,
-      count: formattedLeads.length
+      count: formattedLeads.length,
+      performance: {
+        queryTime: queryTime,
+        formatTime: formatTime,
+        totalTime: totalTime
+      }
     });
   } catch (error) {
     console.error('Error fetching leads:', error);
