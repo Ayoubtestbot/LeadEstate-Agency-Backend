@@ -3473,6 +3473,188 @@ app.get('/api/analytics/budget-analysis', async (req, res) => {
   }
 });
 
+// COMPREHENSIVE ANALYTICS ENDPOINTS - Real Data Only
+app.get('/api/analytics/comprehensive-dashboard', async (req, res) => {
+  try {
+    console.log('📊 Fetching comprehensive analytics dashboard...');
+
+    // Get all analytics data in parallel for better performance
+    const [
+      totalLeadsResult,
+      totalPropertiesResult,
+      totalTeamMembersResult,
+      statusDistributionResult,
+      sourceDistributionResult,
+      agentPerformanceResult,
+      cityDistributionResult,
+      budgetAnalysisResult,
+      monthlyTrendsResult,
+      conversionFunnelResult
+    ] = await Promise.all([
+      // Total leads
+      pool.query('SELECT COUNT(*) as total FROM leads'),
+
+      // Total properties
+      pool.query('SELECT COUNT(*) as total FROM properties'),
+
+      // Total team members
+      pool.query('SELECT COUNT(*) as total FROM team_members WHERE status = $1', ['active']),
+
+      // Status distribution
+      pool.query(`
+        SELECT status, COUNT(*) as count,
+               ROUND((COUNT(*) * 100.0 / (SELECT COUNT(*) FROM leads)), 2) as percentage
+        FROM leads
+        GROUP BY status
+        ORDER BY count DESC
+      `),
+
+      // Source distribution
+      pool.query(`
+        SELECT source, COUNT(*) as count,
+               ROUND((COUNT(*) * 100.0 / (SELECT COUNT(*) FROM leads)), 2) as percentage
+        FROM leads
+        GROUP BY source
+        ORDER BY count DESC
+      `),
+
+      // Agent performance
+      pool.query(`
+        SELECT
+          assigned_to as agent,
+          COUNT(*) as total_leads,
+          COUNT(CASE WHEN status IN ('qualified', 'proposal', 'negotiation', 'closed-won') THEN 1 END) as qualified_leads,
+          COUNT(CASE WHEN status = 'closed-won' THEN 1 END) as closed_deals,
+          COUNT(CASE WHEN status = 'closed-lost' THEN 1 END) as lost_deals,
+          AVG(budget) as avg_budget,
+          SUM(CASE WHEN status = 'closed-won' THEN budget * 0.03 ELSE 0 END) as estimated_revenue
+        FROM leads
+        WHERE assigned_to IS NOT NULL AND assigned_to != ''
+        GROUP BY assigned_to
+        ORDER BY total_leads DESC
+      `),
+
+      // City distribution
+      pool.query(`
+        SELECT city, COUNT(*) as count,
+               AVG(budget) as avg_budget,
+               COUNT(CASE WHEN status = 'closed-won' THEN 1 END) as closed_deals
+        FROM leads
+        WHERE city IS NOT NULL AND city != ''
+        GROUP BY city
+        ORDER BY count DESC
+        LIMIT 10
+      `),
+
+      // Budget analysis
+      pool.query(`
+        SELECT
+          CASE
+            WHEN budget < 500000 THEN 'Under 500K'
+            WHEN budget < 1000000 THEN '500K - 1M'
+            WHEN budget < 2000000 THEN '1M - 2M'
+            ELSE 'Over 2M'
+          END as budget_range,
+          COUNT(*) as count,
+          AVG(budget) as avg_budget
+        FROM leads
+        WHERE budget IS NOT NULL AND budget > 0
+        GROUP BY
+          CASE
+            WHEN budget < 500000 THEN 'Under 500K'
+            WHEN budget < 1000000 THEN '500K - 1M'
+            WHEN budget < 2000000 THEN '1M - 2M'
+            ELSE 'Over 2M'
+          END
+        ORDER BY avg_budget ASC
+      `),
+
+      // Monthly trends (last 6 months)
+      pool.query(`
+        SELECT
+          TO_CHAR(created_at, 'YYYY-MM') as month,
+          COUNT(*) as leads_count,
+          COUNT(CASE WHEN status = 'closed-won' THEN 1 END) as closed_deals,
+          SUM(CASE WHEN status = 'closed-won' THEN budget * 0.03 ELSE 0 END) as revenue
+        FROM leads
+        WHERE created_at >= CURRENT_DATE - INTERVAL '6 months'
+        GROUP BY TO_CHAR(created_at, 'YYYY-MM')
+        ORDER BY month DESC
+      `),
+
+      // Conversion funnel
+      pool.query(`
+        SELECT
+          'Total Leads' as stage, COUNT(*) as count, 100.0 as percentage
+        FROM leads
+        UNION ALL
+        SELECT
+          'Contacted' as stage,
+          COUNT(*) as count,
+          ROUND((COUNT(*) * 100.0 / (SELECT COUNT(*) FROM leads)), 2) as percentage
+        FROM leads WHERE status != 'new'
+        UNION ALL
+        SELECT
+          'Qualified' as stage,
+          COUNT(*) as count,
+          ROUND((COUNT(*) * 100.0 / (SELECT COUNT(*) FROM leads)), 2) as percentage
+        FROM leads WHERE status IN ('qualified', 'proposal', 'negotiation', 'closed-won', 'closed-lost')
+        UNION ALL
+        SELECT
+          'Closed Won' as stage,
+          COUNT(*) as count,
+          ROUND((COUNT(*) * 100.0 / (SELECT COUNT(*) FROM leads)), 2) as percentage
+        FROM leads WHERE status = 'closed-won'
+        ORDER BY count DESC
+      `)
+    ]);
+
+    // Format the comprehensive dashboard data
+    const dashboardData = {
+      overview: {
+        totalLeads: parseInt(totalLeadsResult.rows[0].total),
+        totalProperties: parseInt(totalPropertiesResult.rows[0].total),
+        totalTeamMembers: parseInt(totalTeamMembersResult.rows[0].total),
+        totalRevenue: agentPerformanceResult.rows.reduce((sum, agent) => sum + (parseFloat(agent.estimated_revenue) || 0), 0),
+        avgConversionRate: agentPerformanceResult.rows.length > 0 ?
+          agentPerformanceResult.rows.reduce((sum, agent) => {
+            const rate = agent.total_leads > 0 ? (agent.qualified_leads / agent.total_leads) * 100 : 0;
+            return sum + rate;
+          }, 0) / agentPerformanceResult.rows.length : 0
+      },
+      statusDistribution: statusDistributionResult.rows,
+      sourceDistribution: sourceDistributionResult.rows,
+      agentPerformance: agentPerformanceResult.rows.map(agent => ({
+        ...agent,
+        conversion_rate: agent.total_leads > 0 ? ((agent.qualified_leads / agent.total_leads) * 100).toFixed(1) : '0.0',
+        close_rate: agent.qualified_leads > 0 ? ((agent.closed_deals / agent.qualified_leads) * 100).toFixed(1) : '0.0',
+        estimated_revenue: parseFloat(agent.estimated_revenue) || 0,
+        avg_budget: parseFloat(agent.avg_budget) || 0
+      })),
+      cityDistribution: cityDistributionResult.rows,
+      budgetAnalysis: budgetAnalysisResult.rows,
+      monthlyTrends: monthlyTrendsResult.rows,
+      conversionFunnel: conversionFunnelResult.rows,
+      generatedAt: new Date().toISOString()
+    };
+
+    console.log(`✅ Comprehensive analytics generated: ${dashboardData.overview.totalLeads} leads, ${dashboardData.agentPerformance.length} agents`);
+
+    res.json({
+      success: true,
+      data: dashboardData
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching comprehensive analytics:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch comprehensive analytics',
+      error: error.message
+    });
+  }
+});
+
 // Properties endpoints
 app.get('/api/properties', async (req, res) => {
   try {
