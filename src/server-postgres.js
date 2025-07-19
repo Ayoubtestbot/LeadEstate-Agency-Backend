@@ -3768,13 +3768,36 @@ app.post('/api/database/create-missing-tables', async (req, res) => {
   }
 });
 
-// COMPREHENSIVE KPI SYSTEM - Role-based Analytics
+// COMPREHENSIVE KPI SYSTEM - Role-based Analytics with improved error handling
 app.get('/api/kpis/:role/:period', async (req, res) => {
+  let client;
   try {
     const { role, period } = req.params;
     const { agent } = req.query; // Optional: specific agent for Super Agent/Manager views
 
     console.log(`📊 Fetching ${role} KPIs for ${period} period`);
+
+    // Validate role parameter
+    if (!['manager', 'super-agent', 'agent'].includes(role)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid role specified. Must be manager, super-agent, or agent.'
+      });
+    }
+
+    // Validate period parameter
+    if (!['daily', 'weekly', 'monthly', 'yearly'].includes(period)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid period specified. Must be daily, weekly, monthly, or yearly.'
+      });
+    }
+
+    // Get database client with connection management
+    client = await pool.connect();
+
+    // Set statement timeout to prevent long-running queries
+    await client.query('SET statement_timeout = 30000'); // 30 seconds
 
     // Define date ranges based on period
     const getDateRange = (period) => {
@@ -4088,6 +4111,15 @@ app.get('/api/kpis/:role/:period', async (req, res) => {
       message: 'Failed to fetch KPIs',
       error: error.message
     });
+  } finally {
+    // Always release the database client
+    if (client) {
+      try {
+        client.release();
+      } catch (releaseError) {
+        console.error('❌ Error releasing database client:', releaseError);
+      }
+    }
   }
 });
 
