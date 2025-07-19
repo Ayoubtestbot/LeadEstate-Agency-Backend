@@ -3662,6 +3662,112 @@ app.get('/api/analytics/comprehensive-dashboard', async (req, res) => {
   }
 });
 
+// FIX MISSING TABLES - Create invitation_logs table
+app.post('/api/database/create-missing-tables', async (req, res) => {
+  try {
+    console.log('🔧 Creating missing database tables...');
+
+    // Create invitation_logs table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS invitation_logs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID,
+        email_type VARCHAR(100) NOT NULL,
+        email_address VARCHAR(255) NOT NULL,
+        sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        email_status VARCHAR(50) DEFAULT 'sent',
+        email_provider_id VARCHAR(255),
+        error_message TEXT
+      )
+    `);
+
+    // Create indexes for invitation logs
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_invitation_logs_user_id ON invitation_logs(user_id)
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_invitation_logs_email_type ON invitation_logs(email_type)
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_invitation_logs_sent_at ON invitation_logs(sent_at)
+    `);
+
+    // Create agencies table if it doesn't exist
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS agencies (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name VARCHAR(255) NOT NULL,
+        owner_id UUID,
+        manager_id UUID,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        settings JSONB DEFAULT '{}',
+        status VARCHAR(50) DEFAULT 'active',
+        email VARCHAR(255),
+        phone VARCHAR(50),
+        address TEXT,
+        city VARCHAR(100),
+        country VARCHAR(100),
+        license_number VARCHAR(100),
+        specialization TEXT[],
+        description TEXT
+      )
+    `);
+
+    // Add missing columns to users table if they don't exist
+    const userColumns = [
+      'ALTER TABLE users ADD COLUMN IF NOT EXISTS invitation_token VARCHAR(255)',
+      'ALTER TABLE users ADD COLUMN IF NOT EXISTS invitation_sent_at TIMESTAMP',
+      'ALTER TABLE users ADD COLUMN IF NOT EXISTS invitation_expires_at TIMESTAMP',
+      'ALTER TABLE users ADD COLUMN IF NOT EXISTS account_activated_at TIMESTAMP',
+      'ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP',
+      'ALTER TABLE users ADD COLUMN IF NOT EXISTS agency_name VARCHAR(255)',
+      'ALTER TABLE users ADD COLUMN IF NOT EXISTS invited_by VARCHAR(255)'
+    ];
+
+    for (const columnQuery of userColumns) {
+      try {
+        await pool.query(columnQuery);
+      } catch (error) {
+        console.log(`Column might already exist: ${error.message}`);
+      }
+    }
+
+    // Add missing columns to leads table
+    const leadColumns = [
+      'ALTER TABLE leads ADD COLUMN IF NOT EXISTS agency_id UUID',
+      'ALTER TABLE leads ADD COLUMN IF NOT EXISTS contacted_at TIMESTAMP'
+    ];
+
+    for (const columnQuery of leadColumns) {
+      try {
+        await pool.query(columnQuery);
+      } catch (error) {
+        console.log(`Column might already exist: ${error.message}`);
+      }
+    }
+
+    console.log('✅ Missing database tables and columns created successfully');
+
+    res.json({
+      success: true,
+      message: 'Missing database tables and columns created successfully',
+      tablesCreated: ['invitation_logs', 'agencies'],
+      columnsAdded: ['users: invitation fields', 'leads: agency_id, contacted_at']
+    });
+
+  } catch (error) {
+    console.error('❌ Error creating missing tables:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create missing tables',
+      error: error.message
+    });
+  }
+});
+
 // Properties endpoints
 app.get('/api/properties', async (req, res) => {
   try {
