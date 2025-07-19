@@ -1270,11 +1270,12 @@ app.post('/api/leads/create-moroccan-leads', async (req, res) => {
       'Safi', 'Mohammedia', 'Khouribga', 'Beni Mellal', 'El Jadida', 'Taza', 'Nador', 'Settat', 'Larache', 'Ksar El Kebir'
     ];
 
+    // FIXED: Use only your original system values
     const leadSources = [
-      'Facebook', 'Google', 'Website', 'Instagram', 'Referral', 'Walk-in', 'LinkedIn', 'WhatsApp', 'Phone Call', 'Email Campaign'
+      'website', 'facebook', 'google', 'referral', 'walk-in', 'other'
     ];
 
-    const leadStatuses = ['new', 'contacted', 'qualified', 'interested', 'negotiating', 'closed', 'lost'];
+    const leadStatuses = ['new', 'contacted', 'qualified', 'proposal', 'negotiation', 'closed-won', 'closed-lost'];
 
     // Your 6 real team members
     const teamMembers = [
@@ -1444,6 +1445,88 @@ app.post('/api/leads/create-moroccan-leads', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to create Moroccan leads',
+      error: error.message
+    });
+  }
+});
+
+// Fix existing leads with wrong statuses/sources (cleanup endpoint)
+app.post('/api/leads/fix-status-source', async (req, res) => {
+  try {
+    console.log('🔧 Fixing leads with incorrect statuses and sources...');
+
+    // Map wrong values to correct ones
+    const statusMapping = {
+      'interested': 'qualified',
+      'negotiating': 'negotiation',
+      'closed': 'closed-won',
+      'lost': 'closed-lost'
+    };
+
+    const sourceMapping = {
+      'Instagram': 'other',
+      'LinkedIn': 'other',
+      'WhatsApp': 'other',
+      'Phone Call': 'other',
+      'Email Campaign': 'other'
+    };
+
+    let fixedCount = 0;
+
+    // Fix statuses
+    for (const [wrongStatus, correctStatus] of Object.entries(statusMapping)) {
+      const result = await pool.query(
+        'UPDATE leads SET status = $1 WHERE status = $2',
+        [correctStatus, wrongStatus]
+      );
+      if (result.rowCount > 0) {
+        console.log(`✅ Fixed ${result.rowCount} leads: ${wrongStatus} → ${correctStatus}`);
+        fixedCount += result.rowCount;
+      }
+    }
+
+    // Fix sources
+    for (const [wrongSource, correctSource] of Object.entries(sourceMapping)) {
+      const result = await pool.query(
+        'UPDATE leads SET source = $1 WHERE source = $2',
+        [correctSource, wrongSource]
+      );
+      if (result.rowCount > 0) {
+        console.log(`✅ Fixed ${result.rowCount} leads: ${wrongSource} → ${correctSource}`);
+        fixedCount += result.rowCount;
+      }
+    }
+
+    // Get current status/source distribution
+    const statusStats = await pool.query(`
+      SELECT status, COUNT(*) as count
+      FROM leads
+      GROUP BY status
+      ORDER BY count DESC
+    `);
+
+    const sourceStats = await pool.query(`
+      SELECT source, COUNT(*) as count
+      FROM leads
+      GROUP BY source
+      ORDER BY count DESC
+    `);
+
+    console.log(`🎉 Fixed ${fixedCount} leads with incorrect values`);
+
+    res.json({
+      success: true,
+      message: `Fixed ${fixedCount} leads with incorrect statuses/sources`,
+      fixedCount,
+      currentStatusDistribution: statusStats.rows,
+      currentSourceDistribution: sourceStats.rows
+    });
+
+  } catch (error) {
+    console.error('Error fixing lead statuses/sources:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fix lead statuses/sources',
       error: error.message
     });
   }
