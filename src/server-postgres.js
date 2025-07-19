@@ -3435,19 +3435,26 @@ app.get('/api/analytics/budget-analysis', async (req, res) => {
     const result = await pool.query(`
       SELECT
         CASE
-          WHEN budget::numeric < 300000 THEN 'Under 300K'
-          WHEN budget::numeric < 500000 THEN '300K - 500K'
-          WHEN budget::numeric < 750000 THEN '500K - 750K'
-          WHEN budget::numeric < 1000000 THEN '750K - 1M'
+          WHEN budget < 300000 THEN 'Under 300K'
+          WHEN budget < 500000 THEN '300K - 500K'
+          WHEN budget < 750000 THEN '500K - 750K'
+          WHEN budget < 1000000 THEN '750K - 1M'
           ELSE 'Over 1M'
         END as budget_range,
         COUNT(*) as count,
-        AVG(budget::numeric) as avg_budget,
+        AVG(budget) as avg_budget,
         COUNT(CASE WHEN status = 'closed-won' THEN 1 END) as conversions
       FROM leads
-      WHERE budget IS NOT NULL AND budget != '' AND budget ~ '^[0-9]+$'
-      GROUP BY budget_range
-      ORDER BY AVG(budget::numeric)
+      WHERE budget IS NOT NULL AND budget > 0
+      GROUP BY
+        CASE
+          WHEN budget < 300000 THEN 'Under 300K'
+          WHEN budget < 500000 THEN '300K - 500K'
+          WHEN budget < 750000 THEN '500K - 750K'
+          WHEN budget < 1000000 THEN '750K - 1M'
+          ELSE 'Over 1M'
+        END
+      ORDER BY AVG(budget)
     `);
 
     const formattedData = result.rows.map(row => ({
