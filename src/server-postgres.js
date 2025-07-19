@@ -3768,6 +3768,329 @@ app.post('/api/database/create-missing-tables', async (req, res) => {
   }
 });
 
+// COMPREHENSIVE KPI SYSTEM - Role-based Analytics
+app.get('/api/kpis/:role/:period', async (req, res) => {
+  try {
+    const { role, period } = req.params;
+    const { agent } = req.query; // Optional: specific agent for Super Agent/Manager views
+
+    console.log(`📊 Fetching ${role} KPIs for ${period} period`);
+
+    // Define date ranges based on period
+    const getDateRange = (period) => {
+      const now = new Date();
+      const ranges = {
+        daily: {
+          start: new Date(now.getFullYear(), now.getMonth(), now.getDate()),
+          end: new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
+        },
+        weekly: {
+          start: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000),
+          end: now
+        },
+        monthly: {
+          start: new Date(now.getFullYear(), now.getMonth(), 1),
+          end: new Date(now.getFullYear(), now.getMonth() + 1, 1)
+        },
+        yearly: {
+          start: new Date(now.getFullYear(), 0, 1),
+          end: new Date(now.getFullYear() + 1, 0, 1)
+        }
+      };
+      return ranges[period] || ranges.monthly;
+    };
+
+    const dateRange = getDateRange(period);
+    let kpiData = {};
+
+    // AGENT KPIs
+    if (role === 'agent') {
+      const agentName = agent || 'All Agents';
+
+      // Number of leads handled
+      const leadsHandled = await pool.query(`
+        SELECT COUNT(*) as count
+        FROM leads
+        WHERE assigned_to = $1
+        AND created_at >= $2 AND created_at < $3
+      `, [agentName, dateRange.start, dateRange.end]);
+
+      // Number of calls made (using contacted_at as proxy)
+      const callsMade = await pool.query(`
+        SELECT COUNT(*) as count
+        FROM leads
+        WHERE assigned_to = $1
+        AND contacted_at IS NOT NULL
+        AND contacted_at >= $2 AND contacted_at < $3
+      `, [agentName, dateRange.start, dateRange.end]);
+
+      // Number of follow-ups (status changes as proxy)
+      const followUps = await pool.query(`
+        SELECT COUNT(*) as count
+        FROM leads
+        WHERE assigned_to = $1
+        AND status IN ('contacted', 'qualified', 'proposal', 'negotiation')
+        AND updated_at >= $2 AND updated_at < $3
+      `, [agentName, dateRange.start, dateRange.end]);
+
+      // Number of leads converted
+      const leadsConverted = await pool.query(`
+        SELECT COUNT(*) as count
+        FROM leads
+        WHERE assigned_to = $1
+        AND status = 'closed-won'
+        AND updated_at >= $2 AND updated_at < $3
+      `, [agentName, dateRange.start, dateRange.end]);
+
+      // Average response time
+      const avgResponseTime = await pool.query(`
+        SELECT AVG(EXTRACT(EPOCH FROM (contacted_at - created_at))/3600) as avg_hours
+        FROM leads
+        WHERE assigned_to = $1
+        AND contacted_at IS NOT NULL
+        AND created_at >= $2 AND created_at < $3
+      `, [agentName, dateRange.start, dateRange.end]);
+
+      // Follow-ups completed on time (within 24 hours)
+      const timelyFollowUps = await pool.query(`
+        SELECT COUNT(*) as count
+        FROM leads
+        WHERE assigned_to = $1
+        AND contacted_at IS NOT NULL
+        AND EXTRACT(EPOCH FROM (contacted_at - created_at))/3600 <= 24
+        AND created_at >= $2 AND created_at < $3
+      `, [agentName, dateRange.start, dateRange.end]);
+
+      // Ignored/unfollowed leads (new status for more than 48 hours)
+      const ignoredLeads = await pool.query(`
+        SELECT COUNT(*) as count
+        FROM leads
+        WHERE assigned_to = $1
+        AND status = 'new'
+        AND created_at < NOW() - INTERVAL '48 hours'
+        AND created_at >= $2 AND created_at < $3
+      `, [agentName, dateRange.start, dateRange.end]);
+
+      // Personal conversion rate
+      const totalHandled = parseInt(leadsHandled.rows[0].count) || 0;
+      const totalConverted = parseInt(leadsConverted.rows[0].count) || 0;
+      const conversionRate = totalHandled > 0 ? ((totalConverted / totalHandled) * 100).toFixed(2) : 0;
+
+      kpiData = {
+        role: 'agent',
+        period,
+        agent: agentName,
+        kpis: {
+          leadsHandled: totalHandled,
+          callsMade: parseInt(callsMade.rows[0].count) || 0,
+          followUpsSent: parseInt(followUps.rows[0].count) || 0,
+          leadsConverted: totalConverted,
+          avgResponseTimeHours: parseFloat(avgResponseTime.rows[0].avg_hours) || 0,
+          timelyFollowUps: parseInt(timelyFollowUps.rows[0].count) || 0,
+          ignoredLeads: parseInt(ignoredLeads.rows[0].count) || 0,
+          conversionRate: parseFloat(conversionRate)
+        }
+      };
+    }
+
+    // SUPER AGENT KPIs
+    else if (role === 'super-agent') {
+      // Total leads assigned to team
+      const totalLeadsAssigned = await pool.query(`
+        SELECT COUNT(*) as count
+        FROM leads
+        WHERE assigned_to IS NOT NULL
+        AND created_at >= $1 AND created_at < $2
+      `, [dateRange.start, dateRange.end]);
+
+      // Lead reassignment rate (leads that changed assigned_to)
+      const reassignments = await pool.query(`
+        SELECT COUNT(*) as count
+        FROM leads
+        WHERE updated_at >= $1 AND updated_at < $2
+        AND updated_at != created_at
+      `, [dateRange.start, dateRange.end]);
+
+      // Performance comparison between agents
+      const agentPerformance = await pool.query(`
+        SELECT
+          assigned_to,
+          COUNT(*) as total_leads,
+          COUNT(CASE WHEN status = 'closed-won' THEN 1 END) as converted_leads,
+          AVG(EXTRACT(EPOCH FROM (contacted_at - created_at))/3600) as avg_response_hours
+        FROM leads
+        WHERE assigned_to IS NOT NULL
+        AND created_at >= $1 AND created_at < $2
+        GROUP BY assigned_to
+        ORDER BY converted_leads DESC
+      `, [dateRange.start, dateRange.end]);
+
+      // Leads without action for X days (3+ days)
+      const staleLeads = await pool.query(`
+        SELECT COUNT(*) as count
+        FROM leads
+        WHERE status = 'new'
+        AND created_at < NOW() - INTERVAL '3 days'
+        AND created_at >= $1 AND created_at < $2
+      `, [dateRange.start, dateRange.end]);
+
+      // Leads pending too long (in progress for 7+ days)
+      const pendingLeads = await pool.query(`
+        SELECT COUNT(*) as count
+        FROM leads
+        WHERE status IN ('contacted', 'qualified', 'proposal', 'negotiation')
+        AND updated_at < NOW() - INTERVAL '7 days'
+        AND created_at >= $1 AND created_at < $2
+      `, [dateRange.start, dateRange.end]);
+
+      kpiData = {
+        role: 'super-agent',
+        period,
+        kpis: {
+          totalLeadsAssigned: parseInt(totalLeadsAssigned.rows[0].count) || 0,
+          reassignmentRate: ((parseInt(reassignments.rows[0].count) || 0) / Math.max(1, parseInt(totalLeadsAssigned.rows[0].count)) * 100).toFixed(2),
+          agentPerformance: agentPerformance.rows.map(agent => ({
+            agent: agent.assigned_to,
+            totalLeads: parseInt(agent.total_leads),
+            convertedLeads: parseInt(agent.converted_leads),
+            conversionRate: agent.total_leads > 0 ? ((agent.converted_leads / agent.total_leads) * 100).toFixed(2) : 0,
+            avgResponseHours: parseFloat(agent.avg_response_hours) || 0
+          })),
+          staleLeads: parseInt(staleLeads.rows[0].count) || 0,
+          pendingLeads: parseInt(pendingLeads.rows[0].count) || 0,
+          smartSuggestions: [
+            `${parseInt(staleLeads.rows[0].count) || 0} leads need immediate attention`,
+            `${parseInt(pendingLeads.rows[0].count) || 0} leads are pending too long`
+          ]
+        }
+      };
+    }
+
+    // MANAGER KPIs
+    else if (role === 'manager') {
+      // Total leads received by source
+      const leadsBySource = await pool.query(`
+        SELECT
+          source,
+          COUNT(*) as count
+        FROM leads
+        WHERE created_at >= $1 AND created_at < $2
+        GROUP BY source
+        ORDER BY count DESC
+      `, [dateRange.start, dateRange.end]);
+
+      // Global conversion rate
+      const globalConversion = await pool.query(`
+        SELECT
+          COUNT(*) as total_leads,
+          COUNT(CASE WHEN status = 'closed-won' THEN 1 END) as converted_leads
+        FROM leads
+        WHERE created_at >= $1 AND created_at < $2
+      `, [dateRange.start, dateRange.end]);
+
+      // Average time between lead reception and first contact
+      const avgFirstContactTime = await pool.query(`
+        SELECT AVG(EXTRACT(EPOCH FROM (contacted_at - created_at))/3600) as avg_hours
+        FROM leads
+        WHERE contacted_at IS NOT NULL
+        AND created_at >= $1 AND created_at < $2
+      `, [dateRange.start, dateRange.end]);
+
+      // Estimated value of converted leads
+      const estimatedValue = await pool.query(`
+        SELECT SUM(budget * 0.03) as total_value
+        FROM leads
+        WHERE status = 'closed-won'
+        AND budget IS NOT NULL
+        AND updated_at >= $1 AND updated_at < $2
+      `, [dateRange.start, dateRange.end]);
+
+      // Lead distribution by agent
+      const leadDistribution = await pool.query(`
+        SELECT
+          assigned_to,
+          COUNT(*) as count
+        FROM leads
+        WHERE assigned_to IS NOT NULL
+        AND created_at >= $1 AND created_at < $2
+        GROUP BY assigned_to
+        ORDER BY count DESC
+      `, [dateRange.start, dateRange.end]);
+
+      // Channel effectiveness
+      const channelEffectiveness = await pool.query(`
+        SELECT
+          source,
+          COUNT(*) as total_leads,
+          COUNT(CASE WHEN status = 'closed-won' THEN 1 END) as converted_leads,
+          AVG(budget) as avg_budget
+        FROM leads
+        WHERE created_at >= $1 AND created_at < $2
+        GROUP BY source
+        ORDER BY converted_leads DESC
+      `, [dateRange.start, dateRange.end]);
+
+      // Timely follow-up rate
+      const timelyFollowUpRate = await pool.query(`
+        SELECT
+          COUNT(*) as total_leads,
+          COUNT(CASE WHEN contacted_at IS NOT NULL AND EXTRACT(EPOCH FROM (contacted_at - created_at))/3600 <= 24 THEN 1 END) as timely_followups
+        FROM leads
+        WHERE created_at >= $1 AND created_at < $2
+      `, [dateRange.start, dateRange.end]);
+
+      const totalLeads = parseInt(globalConversion.rows[0].total_leads) || 0;
+      const convertedLeads = parseInt(globalConversion.rows[0].converted_leads) || 0;
+      const globalConversionRate = totalLeads > 0 ? ((convertedLeads / totalLeads) * 100).toFixed(2) : 0;
+
+      const totalTimelyFollowups = parseInt(timelyFollowUpRate.rows[0].timely_followups) || 0;
+      const timelyRate = totalLeads > 0 ? ((totalTimelyFollowups / totalLeads) * 100).toFixed(2) : 0;
+
+      kpiData = {
+        role: 'manager',
+        period,
+        kpis: {
+          totalLeadsReceived: totalLeads,
+          leadsBySource: leadsBySource.rows,
+          globalConversionRate: parseFloat(globalConversionRate),
+          avgFirstContactTimeHours: parseFloat(avgFirstContactTime.rows[0].avg_hours) || 0,
+          estimatedValue: parseFloat(estimatedValue.rows[0].total_value) || 0,
+          leadDistribution: leadDistribution.rows,
+          channelEffectiveness: channelEffectiveness.rows.map(channel => ({
+            source: channel.source,
+            totalLeads: parseInt(channel.total_leads),
+            convertedLeads: parseInt(channel.converted_leads),
+            conversionRate: channel.total_leads > 0 ? ((channel.converted_leads / channel.total_leads) * 100).toFixed(2) : 0,
+            avgBudget: parseFloat(channel.avg_budget) || 0,
+            roi: ((parseInt(channel.converted_leads) * (parseFloat(channel.avg_budget) || 0) * 0.03) / Math.max(1, parseInt(channel.total_leads))).toFixed(2)
+          })),
+          timelyFollowUpRate: parseFloat(timelyRate),
+          agentWorkload: leadDistribution.rows
+        }
+      };
+    }
+
+    console.log(`✅ ${role} KPIs calculated for ${period} period`);
+
+    res.json({
+      success: true,
+      data: kpiData,
+      dateRange: {
+        start: dateRange.start.toISOString(),
+        end: dateRange.end.toISOString()
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching KPIs:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch KPIs',
+      error: error.message
+    });
+  }
+});
+
 // Properties endpoints
 app.get('/api/properties', async (req, res) => {
   try {
