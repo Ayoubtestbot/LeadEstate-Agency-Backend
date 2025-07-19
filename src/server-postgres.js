@@ -83,6 +83,7 @@ app.use(cors({
     'X-Requested-With',
     'Accept',
     'Origin',
+    'Cache-Control',
     'x-owner-api-key'
   ]
 }));
