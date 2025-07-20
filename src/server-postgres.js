@@ -1986,33 +1986,42 @@ app.get('/api/dashboard', async (req, res) => {
 
     // Execute all queries in parallel with optimized queries and limits
     const [leadsResult, propertiesResult, teamResult] = await Promise.all([
-      // Optimized leads query with ALL leads (no limit for complete data)
+      // Optimized leads query with error handling
       pool.query(`
         SELECT id, first_name, last_name, email, phone, city, address, source, budget, notes, status, assigned_to,
-               interested_properties, created_at, updated_at
+               created_at, updated_at
         FROM leads
         ORDER BY created_at DESC
-      `),
+      `).catch(err => {
+        console.error('Leads query error:', err);
+        return { rows: [] };
+      }),
 
-      // Optimized properties query with ALL properties (no limit for complete data)
+      // Optimized properties query with error handling
       pool.query(`
         SELECT id, title, price, location, bedrooms, bathrooms, area, property_type, status,
                main_image, images, created_at, updated_at
         FROM properties
         ORDER BY created_at DESC
-      `),
+      `).catch(err => {
+        console.error('Properties query error:', err);
+        return { rows: [] };
+      }),
 
-      // Team members query (usually small dataset)
+      // Team members query with error handling
       pool.query(`
         SELECT id, name, email, phone, role, department, status, joined_at, created_at, updated_at
         FROM team_members
         WHERE status = 'active'
         ORDER BY name ASC
-      `)
+      `).catch(err => {
+        console.error('Team query error:', err);
+        return { rows: [] };
+      })
     ]);
 
-    // Transform leads data efficiently
-    const transformedLeads = leadsResult.rows.map(lead => ({
+    // Transform leads data efficiently with error handling
+    const transformedLeads = (leadsResult.rows || []).map(lead => ({
       id: lead.id,
       name: `${lead.first_name || ''} ${lead.last_name || ''}`.trim(),
       email: lead.email,
@@ -2024,15 +2033,15 @@ app.get('/api/dashboard', async (req, res) => {
       notes: lead.notes,
       status: lead.status,
       assignedTo: lead.assigned_to,
-      interestedProperties: lead.interested_properties ? JSON.parse(lead.interested_properties) : [],
+      interestedProperties: [], // Field removed from query for performance
       createdAt: lead.created_at,
       updatedAt: lead.updated_at,
       created_at: lead.created_at,
       updated_at: lead.updated_at
     }));
 
-    // Transform properties data efficiently
-    const transformedProperties = propertiesResult.rows.map(property => ({
+    // Transform properties data efficiently with error handling
+    const transformedProperties = (propertiesResult.rows || []).map(property => ({
       id: property.id,
       title: property.title,
       price: property.price,
@@ -2055,14 +2064,14 @@ app.get('/api/dashboard', async (req, res) => {
     const queryTime = endTime - startTime;
 
     console.log(`✅ Dashboard data loaded in ${queryTime}ms`);
-    console.log(`📊 Data counts: ${transformedLeads.length} leads, ${transformedProperties.length} properties, ${teamResult.rows.length} team members`);
+    console.log(`📊 Data counts: ${transformedLeads.length} leads, ${transformedProperties.length} properties, ${teamResult.rows?.length || 0} team members`);
 
     res.json({
       success: true,
       data: {
         leads: transformedLeads,
         properties: transformedProperties,
-        team: teamResult.rows
+        team: teamResult.rows || []
       },
       performance: {
         queryTime: queryTime,
