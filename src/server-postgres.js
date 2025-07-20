@@ -2873,6 +2873,11 @@ app.post('/api/cleanup-demo-leads', async (req, res) => {
 
 // Simple login endpoint for demo users
 app.post('/api/auth/login', async (req, res) => {
+  // Add explicit CORS headers for this endpoint
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Cache-Control');
+
   try {
     const { email, password } = req.body;
     console.log('🔐 Login attempt for:', email);
@@ -3396,13 +3401,29 @@ app.get('/api/analytics/leads-timeline', async (req, res) => {
         dateInterval = '1 day';
     }
 
+    // Calculate the date range based on period
+    let intervalQuery;
+    switch (period) {
+      case 'daily':
+        intervalQuery = "NOW() - INTERVAL '1 day'";
+        break;
+      case 'weekly':
+        intervalQuery = "NOW() - INTERVAL '7 days'";
+        break;
+      case 'monthly':
+        intervalQuery = "NOW() - INTERVAL '30 days'";
+        break;
+      default:
+        intervalQuery = "NOW() - INTERVAL '7 days'";
+    }
+
     const result = await pool.query(`
       SELECT
         TO_CHAR(created_at, $1) as date,
         COUNT(*) as count,
         COUNT(CASE WHEN status = 'closed-won' THEN 1 END) as conversions
       FROM leads
-      WHERE created_at >= NOW() - INTERVAL '1 ${period}'
+      WHERE created_at >= ${intervalQuery}
       GROUP BY TO_CHAR(created_at, $1)
       ORDER BY date
     `, [dateFormat]);
@@ -3771,6 +3792,11 @@ app.post('/api/database/create-missing-tables', async (req, res) => {
 
 // COMPREHENSIVE KPI SYSTEM - Role-based Analytics with improved error handling
 app.get('/api/kpis/:role/:period', async (req, res) => {
+  // Add explicit CORS headers for this endpoint
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Cache-Control');
+
   let client;
   try {
     const { role, period } = req.params;
