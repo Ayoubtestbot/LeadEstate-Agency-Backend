@@ -1697,7 +1697,7 @@ app.get('/api/dashboard/stats', async (req, res) => {
     const propertiesResult = await pool.query('SELECT COUNT(*) as count FROM properties');
     
     const totalLeads = leadsResult.rows.reduce((sum, row) => sum + parseInt(row.total), 0);
-    const closedWonLeads = leadsResult.rows.find(row => row.status === 'closed_won')?.total || 0;
+    const closedWonLeads = leadsResult.rows.find(row => row.status === 'closed-won')?.total || 0;
     const availableProperties = propertiesResult.rows[0]?.count || 0;
     const conversionRate = totalLeads > 0 ? ((closedWonLeads / totalLeads) * 100).toFixed(1) : 0;
     

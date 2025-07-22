@@ -316,9 +316,9 @@ app.get('/api/dashboard/stats', (req, res) => {
   const stats = {
     totalLeads: persistentData.leads.length,
     availableProperties: persistentData.properties.length,
-    conversionRate: persistentData.leads.length > 0 ? 
-      ((persistentData.leads.filter(l => l.status === 'closed_won').length / persistentData.leads.length) * 100).toFixed(1) : 0,
-    closedWonLeads: persistentData.leads.filter(l => l.status === 'closed_won').length
+    conversionRate: persistentData.leads.length > 0 ?
+      ((persistentData.leads.filter(l => l.status === 'closed-won').length / persistentData.leads.length) * 100).toFixed(1) : 0,
+    closedWonLeads: persistentData.leads.filter(l => l.status === 'closed-won').length
   };
   
   res.json({

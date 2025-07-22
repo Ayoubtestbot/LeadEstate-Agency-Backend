@@ -255,8 +255,8 @@ app.get('/api/dashboard/stats', (req, res) => {
   const stats = {
     totalLeads: leads.length,
     availableProperties: properties.length,
-    conversionRate: leads.length > 0 ? ((leads.filter(l => l.status === 'closed_won').length / leads.length) * 100).toFixed(1) : 0,
-    closedWonLeads: leads.filter(l => l.status === 'closed_won').length
+    conversionRate: leads.length > 0 ? ((leads.filter(l => l.status === 'closed-won').length / leads.length) * 100).toFixed(1) : 0,
+    closedWonLeads: leads.filter(l => l.status === 'closed-won').length
   };
   
   res.json({
