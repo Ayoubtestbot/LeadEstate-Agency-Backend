@@ -1753,6 +1753,15 @@ app.use('/api/advanced-analytics', advancedAnalyticsRoutes);
 const ownerIntegrationRoutes = require('./routes/owner-integration');
 app.use('/api/owner-integration', ownerIntegrationRoutes);
 
+// SaaS Trial and Subscription routes
+const trialAuthRoutes = require('./routes/trial-auth');
+app.use('/api/auth', trialAuthRoutes);
+
+// Subscription management routes (with subscription middleware)
+const { checkSubscriptionStatus, addTrialInfo } = require('./middleware/subscription');
+const subscriptionRoutes = require('./routes/subscription');
+app.use('/api/subscription', subscriptionRoutes);
+
 // Initialize services
 const reminderService = require('./services/reminderService');
 const auditService = require('./services/auditService');
