@@ -183,12 +183,25 @@ router.post('/trial-signup', [
     });
 
   } catch (error) {
+    console.error('❌ Trial signup error details:', {
+      message: error.message,
+      code: error.code,
+      detail: error.detail,
+      constraint: error.constraint,
+      table: error.table,
+      column: error.column
+    });
     logger.error('Trial signup error:', error);
-    
+
     res.status(500).json({
       success: false,
       message: 'Failed to create trial account. Please try again.',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      error: error.message, // Always show error message for debugging
+      details: {
+        code: error.code,
+        constraint: error.constraint,
+        table: error.table
+      }
     });
   }
 });
