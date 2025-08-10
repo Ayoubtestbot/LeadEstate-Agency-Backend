@@ -120,12 +120,32 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Simple test endpoint
+app.get('/test', (req, res) => {
+  res.status(200).json({
+    message: 'Server is working!',
+    timestamp: new Date().toISOString(),
+    saasRoutes: 'enabled'
+  });
+});
+
 // API routes
 app.use('/api/auth', authRoutes);
 
-// SaaS Trial and Subscription routes
-app.use('/api/auth', trialAuthRoutes);
-app.use('/api/subscription', subscriptionRoutes);
+// SaaS Trial and Subscription routes with error handling
+try {
+  app.use('/api/auth', trialAuthRoutes);
+  console.log('✅ Trial auth routes registered');
+} catch (error) {
+  console.error('❌ Failed to register trial auth routes:', error.message);
+}
+
+try {
+  app.use('/api/subscription', subscriptionRoutes);
+  console.log('✅ Subscription routes registered');
+} catch (error) {
+  console.error('❌ Failed to register subscription routes:', error.message);
+}
 
 // Protected routes with subscription middleware
 app.use('/api/users', authMiddleware, checkSubscriptionStatus, userRoutes);
