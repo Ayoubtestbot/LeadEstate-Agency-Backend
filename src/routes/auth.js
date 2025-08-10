@@ -451,7 +451,7 @@ router.post('/owner/login', [
       });
     }
 
-    // Create owners table if it doesn't exist
+    // Create owners table if it doesn't exist and add missing columns
     await pool.query(`
       CREATE TABLE IF NOT EXISTS owners (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -473,26 +473,57 @@ router.post('/owner/login', [
       )
     `);
 
+    // Add missing columns if they don't exist
+    try {
+      await pool.query(`ALTER TABLE owners ADD COLUMN IF NOT EXISTS company_name VARCHAR(255)`);
+      await pool.query(`ALTER TABLE owners ADD COLUMN IF NOT EXISTS company_address TEXT`);
+      await pool.query(`ALTER TABLE owners ADD COLUMN IF NOT EXISTS phone VARCHAR(20)`);
+      await pool.query(`ALTER TABLE owners ADD COLUMN IF NOT EXISTS reset_token VARCHAR(255)`);
+      await pool.query(`ALTER TABLE owners ADD COLUMN IF NOT EXISTS reset_token_expires TIMESTAMP`);
+      await pool.query(`ALTER TABLE owners ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMP`);
+    } catch (alterError) {
+      // Ignore errors if columns already exist
+      console.log('Some columns may already exist:', alterError.message);
+    }
+
     // Create default owner if it doesn't exist
     const existingOwner = await pool.query('SELECT id FROM owners WHERE email = $1', ['owner@leadestate.com']);
     if (existingOwner.rows.length === 0) {
       const bcrypt = require('bcryptjs');
       const hashedPassword = await bcrypt.hash('password123', 12);
 
-      await pool.query(`
-        INSERT INTO owners (
-          email, password_hash, first_name, last_name, role, status,
-          company_name, email_verified_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-      `, [
-        'owner@leadestate.com',
-        hashedPassword,
-        'Owner',
-        'Admin',
-        'owner',
-        'active',
-        'LeadEstate'
-      ]);
+      // Try to insert with all columns, fall back to basic columns if needed
+      try {
+        await pool.query(`
+          INSERT INTO owners (
+            email, password_hash, first_name, last_name, role, status,
+            company_name, email_verified_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+        `, [
+          'owner@leadestate.com',
+          hashedPassword,
+          'Owner',
+          'Admin',
+          'owner',
+          'active',
+          'LeadEstate'
+        ]);
+      } catch (insertError) {
+        // Fall back to basic insert if company_name column doesn't exist
+        console.log('Falling back to basic insert:', insertError.message);
+        await pool.query(`
+          INSERT INTO owners (
+            email, password_hash, first_name, last_name, role, status
+          ) VALUES ($1, $2, $3, $4, $5, $6)
+        `, [
+          'owner@leadestate.com',
+          hashedPassword,
+          'Owner',
+          'Admin',
+          'owner',
+          'active'
+        ]);
+      }
     }
 
     // Find owner by email
