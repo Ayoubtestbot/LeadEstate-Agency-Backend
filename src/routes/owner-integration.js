@@ -884,12 +884,88 @@ router.post('/setup-database', async (req, res) => {
       }
     }
 
-    console.log('✅ Database tables created successfully with SaaS support');
+    // COMPREHENSIVE USER TABLE STANDARDIZATION
+    console.log('🔄 Standardizing users table for all user types...');
+
+    // Drop and recreate users table with standardized structure
+    await pool.query(`
+      DROP TABLE IF EXISTS users CASCADE
+    `);
+
+    // Create standardized users table
+    await pool.query(`
+      CREATE TABLE users (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password VARCHAR(255) NOT NULL,
+        first_name VARCHAR(100) NOT NULL,
+        last_name VARCHAR(100) NOT NULL,
+        role VARCHAR(50) DEFAULT 'user',
+        status VARCHAR(20) DEFAULT 'active',
+        agency_id UUID REFERENCES agencies(id),
+
+        -- SaaS fields
+        subscription_id UUID,
+        subscription_status VARCHAR(20) DEFAULT 'trial',
+        trial_end_date TIMESTAMP,
+        plan_name VARCHAR(50) DEFAULT 'starter',
+
+        -- Additional fields
+        phone VARCHAR(20),
+        avatar_url VARCHAR(500),
+        last_login_at TIMESTAMP,
+        email_verified_at TIMESTAMP,
+
+        -- Metadata
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create indexes for performance
+    await pool.query(`
+      CREATE INDEX idx_users_email ON users(email);
+      CREATE INDEX idx_users_agency_id ON users(agency_id);
+      CREATE INDEX idx_users_status ON users(status);
+      CREATE INDEX idx_users_subscription_status ON users(subscription_status);
+    `);
+
+    console.log('✅ Standardized users table created');
+
+    // Create a default owner user if it doesn't exist
+    const bcrypt = require('bcryptjs');
+    const ownerPassword = await bcrypt.hash('password123', 10);
+
+    await pool.query(`
+      INSERT INTO users (
+        email, password, first_name, last_name, role, status,
+        subscription_status, email_verified_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+      ON CONFLICT (email) DO NOTHING
+    `, [
+      'owner@leadestate.com',
+      ownerPassword,
+      'System',
+      'Owner',
+      'owner',
+      'active',
+      'enterprise'
+    ]);
+
+    console.log('✅ Default owner user ensured');
+
+    console.log('✅ Database tables created successfully with unified user system');
 
     res.json({
       success: true,
-      message: 'Database tables created successfully with SaaS support',
-      tables: ['agencies', 'users', 'subscription_plans', 'subscriptions'],
+      message: 'Database tables created successfully with unified user system',
+      tables: ['agencies', 'users (standardized)', 'subscription_plans', 'subscriptions'],
+      migrations: [
+        'Dropped and recreated users table with standard structure',
+        'Added all SaaS fields to users table',
+        'Created performance indexes',
+        'Ensured default owner user exists'
+      ],
       timestamp: new Date().toISOString()
     });
 

@@ -59,45 +59,30 @@ const authMiddleware = async (req, res, next) => {
       });
     }
 
-    // Find user in database (try both approaches for compatibility)
+    // Find user in database using ONLY raw SQL (unified approach)
     let results = null;
 
     console.log('🔍 Auth middleware - looking for user:', decoded.userId);
 
     try {
-      // Try the existing Sequelize query first
-      const sequelizeResults = await sequelize.query(
-        'SELECT id, email, first_name, last_name, role, agency_id, is_active, status, subscription_status, trial_end_date, plan_name FROM users WHERE id = :userId AND (is_active = true OR status = \'active\')',
-        {
-          replacements: { userId: decoded.userId },
-          type: sequelize.QueryTypes.SELECT,
-        }
-      );
+      const { pool } = require('../config/database');
+      const userResult = await pool.query(`
+        SELECT
+          id, email, first_name, last_name, role, agency_id, status,
+          subscription_status, trial_end_date, plan_name, phone, avatar_url,
+          last_login_at, email_verified_at, created_at, updated_at
+        FROM users
+        WHERE id = $1 AND status = $2
+      `, [decoded.userId, 'active']);
 
-      if (sequelizeResults && sequelizeResults.length > 0) {
-        results = sequelizeResults[0];
-        console.log('✅ User found via Sequelize query');
+      if (userResult.rows.length > 0) {
+        results = userResult.rows[0];
+        console.log('✅ User found via unified SQL query');
+      } else {
+        console.log('❌ User not found or inactive');
       }
-    } catch (sequelizeError) {
-      console.log('Sequelize query failed, trying raw pool:', sequelizeError.message);
-    }
-
-    // If not found via Sequelize, try raw SQL (for trial users)
-    if (!results) {
-      try {
-        const { pool } = require('../config/database');
-        const userResult = await pool.query(
-          'SELECT id, email, first_name, last_name, role, agency_id, status, subscription_status, trial_end_date, plan_name FROM users WHERE id = $1 AND status = $2',
-          [decoded.userId, 'active']
-        );
-
-        if (userResult.rows.length > 0) {
-          results = userResult.rows[0];
-          console.log('✅ User found via raw SQL query');
-        }
-      } catch (poolError) {
-        console.log('Raw SQL query also failed:', poolError.message);
-      }
+    } catch (sqlError) {
+      console.error('❌ Database query failed:', sqlError.message);
     }
 
     if (!results) {
