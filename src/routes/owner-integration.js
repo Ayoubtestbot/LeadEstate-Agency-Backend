@@ -887,12 +887,28 @@ router.post('/setup-database', async (req, res) => {
     // COMPREHENSIVE USER TABLE STANDARDIZATION
     console.log('🔄 Standardizing users table for all user types...');
 
-    // Drop and recreate users table with standardized structure
+    // Drop and recreate users table with standardized structure (remove foreign key constraint temporarily)
     await pool.query(`
       DROP TABLE IF EXISTS users CASCADE
     `);
 
-    // Create standardized users table
+    // Ensure agencies table exists first
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS agencies (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name VARCHAR(255) NOT NULL,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        manager_name VARCHAR(255) NOT NULL,
+        status VARCHAR(50) DEFAULT 'active',
+        city VARCHAR(255),
+        description TEXT,
+        settings JSONB DEFAULT '{}',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create standardized users table (without foreign key constraint initially)
     await pool.query(`
       CREATE TABLE users (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -902,7 +918,7 @@ router.post('/setup-database', async (req, res) => {
         last_name VARCHAR(100) NOT NULL,
         role VARCHAR(50) DEFAULT 'user',
         status VARCHAR(20) DEFAULT 'active',
-        agency_id UUID REFERENCES agencies(id),
+        agency_id UUID,
 
         -- SaaS fields
         subscription_id UUID,
