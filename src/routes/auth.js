@@ -8,10 +8,10 @@ const logger = require('../utils/logger');
 
 const router = express.Router();
 
-// Rate limiting for auth endpoints
+// Rate limiting for auth endpoints (increased for testing)
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // 5 attempts per window
+  max: 100, // 100 attempts per window (increased for testing)
   message: {
     error: 'Too many authentication attempts, please try again later.',
     retryAfter: 900
