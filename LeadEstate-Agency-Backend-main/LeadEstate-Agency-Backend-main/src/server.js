@@ -26,6 +26,11 @@ const integrationRoutes = require('./routes/integrations');
 const webhookRoutes = require('./routes/webhooks');
 const uploadRoutes = require('./routes/upload');
 
+// SaaS Trial and Subscription routes
+const trialAuthRoutes = require('./routes/trial-auth');
+const subscriptionRoutes = require('./routes/subscription');
+const { checkSubscriptionStatus, addTrialInfo } = require('./middleware/subscription');
+
 const app = express();
 const server = createServer(app);
 
@@ -95,14 +100,20 @@ app.get('/health', (req, res) => {
 
 // API routes
 app.use('/api/auth', authRoutes);
-app.use('/api/users', authMiddleware, userRoutes);
-app.use('/api/leads', authMiddleware, leadRoutes);
-app.use('/api/properties', authMiddleware, propertyRoutes);
-app.use('/api/team', authMiddleware, teamRoutes);
-app.use('/api/analytics', authMiddleware, analyticsRoutes);
-app.use('/api/automation', authMiddleware, automationRoutes);
-app.use('/api/integrations', authMiddleware, integrationRoutes);
-app.use('/api/upload', authMiddleware, uploadRoutes);
+
+// SaaS Trial and Subscription routes
+app.use('/api/auth', trialAuthRoutes);
+app.use('/api/subscription', subscriptionRoutes);
+
+// Protected routes with subscription middleware
+app.use('/api/users', authMiddleware, checkSubscriptionStatus, userRoutes);
+app.use('/api/leads', authMiddleware, checkSubscriptionStatus, addTrialInfo, leadRoutes);
+app.use('/api/properties', authMiddleware, checkSubscriptionStatus, propertyRoutes);
+app.use('/api/team', authMiddleware, checkSubscriptionStatus, teamRoutes);
+app.use('/api/analytics', authMiddleware, checkSubscriptionStatus, analyticsRoutes);
+app.use('/api/automation', authMiddleware, checkSubscriptionStatus, automationRoutes);
+app.use('/api/integrations', authMiddleware, checkSubscriptionStatus, integrationRoutes);
+app.use('/api/upload', authMiddleware, checkSubscriptionStatus, uploadRoutes);
 app.use('/webhooks', webhookRoutes); // No auth for webhooks
 
 // Serve uploaded files
