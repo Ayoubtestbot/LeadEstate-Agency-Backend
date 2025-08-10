@@ -416,4 +416,156 @@ router.get('/verify', async (req, res) => {
   }
 });
 
+// ===== OWNER DASHBOARD AUTHENTICATION =====
+
+// Owner Login endpoint (for Owner Dashboard)
+router.post('/owner/login', [
+  body('email')
+    .isEmail()
+    .normalizeEmail()
+    .withMessage('Please provide a valid email'),
+  body('password')
+    .isLength({ min: 6 })
+    .withMessage('Password must be at least 6 characters long')
+], async (req, res) => {
+  try {
+    // Check validation errors
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const { email, password } = req.body;
+
+    // Get database connection
+    const { pool } = require('../config/database');
+    if (!pool) {
+      logger.error('Database connection not available');
+      return res.status(500).json({
+        success: false,
+        message: 'Database connection error'
+      });
+    }
+
+    // Create owners table if it doesn't exist
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS owners (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password_hash VARCHAR(255) NOT NULL,
+        first_name VARCHAR(100) NOT NULL,
+        last_name VARCHAR(100) NOT NULL,
+        role VARCHAR(50) DEFAULT 'owner',
+        status VARCHAR(20) DEFAULT 'active',
+        phone VARCHAR(20),
+        company_name VARCHAR(255),
+        company_address TEXT,
+        reset_token VARCHAR(255),
+        reset_token_expires TIMESTAMP,
+        last_login_at TIMESTAMP,
+        email_verified_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create default owner if it doesn't exist
+    const existingOwner = await pool.query('SELECT id FROM owners WHERE email = $1', ['owner@leadestate.com']);
+    if (existingOwner.rows.length === 0) {
+      const bcrypt = require('bcryptjs');
+      const hashedPassword = await bcrypt.hash('password123', 12);
+
+      await pool.query(`
+        INSERT INTO owners (
+          email, password_hash, first_name, last_name, role, status,
+          company_name, email_verified_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+      `, [
+        'owner@leadestate.com',
+        hashedPassword,
+        'Owner',
+        'Admin',
+        'owner',
+        'active',
+        'LeadEstate'
+      ]);
+    }
+
+    // Find owner by email
+    const ownerResult = await pool.query(
+      'SELECT * FROM owners WHERE email = $1 AND status = $2',
+      [email, 'active']
+    );
+
+    if (ownerResult.rows.length === 0) {
+      logger.warn(`Failed owner login attempt for email: ${email}`);
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid email or password'
+      });
+    }
+
+    const owner = ownerResult.rows[0];
+
+    // Verify password
+    const bcrypt = require('bcryptjs');
+    const isValidPassword = await bcrypt.compare(password, owner.password_hash);
+
+    if (!isValidPassword) {
+      logger.warn(`Failed owner login attempt for email: ${email} - invalid password`);
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid email or password'
+      });
+    }
+
+    // Update last login time
+    await pool.query(
+      'UPDATE owners SET last_login_at = NOW() WHERE id = $1',
+      [owner.id]
+    );
+
+    // Generate JWT token for owner
+    const token = jwt.sign(
+      {
+        id: owner.id,
+        email: owner.email,
+        role: owner.role,
+        userType: 'owner'
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+    );
+
+    logger.info(`Owner login successful: ${email}`);
+
+    return res.json({
+      success: true,
+      message: 'Login successful',
+      data: {
+        token,
+        user: {
+          id: owner.id,
+          email: owner.email,
+          firstName: owner.first_name,
+          lastName: owner.last_name,
+          role: owner.role,
+          userType: 'owner'
+        }
+      }
+    });
+
+  } catch (error) {
+    logger.error('Owner login error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
 module.exports = router;
