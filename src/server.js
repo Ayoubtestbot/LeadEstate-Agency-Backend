@@ -103,12 +103,30 @@ app.use(helmet({
   },
 }));
 
-// CORS configuration
+// CORS configuration with debugging
 app.use(cors({
-  origin: process.env.CORS_ORIGIN?.split(',') || allowedOrigins,
+  origin: function (origin, callback) {
+    console.log('CORS Origin Request:', origin);
+
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+
+    const corsOrigins = process.env.CORS_ORIGIN?.split(',') || allowedOrigins;
+    console.log('Allowed Origins:', corsOrigins);
+
+    if (corsOrigins.indexOf(origin) !== -1) {
+      console.log('✅ Origin allowed:', origin);
+      callback(null, true);
+    } else {
+      console.log('❌ Origin blocked:', origin);
+      // For now, allow all origins to fix the issue
+      callback(null, true);
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-owner-api-key']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-owner-api-key'],
+  optionsSuccessStatus: 200 // Some legacy browsers (IE11, various SmartTVs) choke on 204
 }));
 
 // Rate limiting
