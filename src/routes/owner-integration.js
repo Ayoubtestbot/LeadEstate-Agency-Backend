@@ -791,7 +791,7 @@ router.post('/setup-database', async (req, res) => {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS subscription_plans (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        name VARCHAR(50) NOT NULL,
+        name VARCHAR(50) NOT NULL UNIQUE,
         display_name VARCHAR(100) NOT NULL,
         description TEXT,
         monthly_price DECIMAL(10,2) NOT NULL,
