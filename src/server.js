@@ -141,6 +141,44 @@ app.get('/test', (req, res) => {
   });
 });
 
+// Database test endpoint
+app.get('/test-db', async (req, res) => {
+  try {
+    const { pool } = require('./config/database');
+
+    if (!pool) {
+      return res.status(500).json({
+        success: false,
+        message: 'Database pool not available',
+        details: 'Pool is null or undefined'
+      });
+    }
+
+    // Test basic query
+    const result = await pool.query('SELECT NOW() as current_time');
+
+    res.status(200).json({
+      success: true,
+      message: 'Database connection working!',
+      data: {
+        currentTime: result.rows[0].current_time,
+        poolConnected: true
+      }
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Database connection failed',
+      error: error.message,
+      details: {
+        name: error.name,
+        code: error.code
+      }
+    });
+  }
+});
+
 // API routes
 app.use('/api/auth', authRoutes);
 
