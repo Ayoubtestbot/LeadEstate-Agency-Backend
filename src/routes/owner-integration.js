@@ -778,12 +778,22 @@ router.post('/setup-database', async (req, res) => {
       console.log('Note: Some columns may already exist:', error.message);
     });
 
-    // Ensure users table has password column (not password_hash)
+    // Ensure users table has both password columns for compatibility
     await pool.query(`
       ALTER TABLE users
-      ADD COLUMN IF NOT EXISTS password VARCHAR(255)
+      ADD COLUMN IF NOT EXISTS password VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255)
     `).catch((error) => {
-      console.log('Note: Password column may already exist:', error.message);
+      console.log('Note: Password columns may already exist:', error.message);
+    });
+
+    // Migrate password_hash to password for consistency (if password is empty)
+    await pool.query(`
+      UPDATE users
+      SET password = password_hash
+      WHERE password IS NULL AND password_hash IS NOT NULL
+    `).catch((error) => {
+      console.log('Note: Password migration may have already been done:', error.message);
     });
 
     // Add foreign key constraint

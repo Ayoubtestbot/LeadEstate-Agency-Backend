@@ -105,20 +105,34 @@ router.post('/login',
         console.log('Sequelize approach failed, trying raw SQL:', sequelizeError.message);
       }
 
-      // If not found via Sequelize, try raw SQL (for trial users)
+      // If not found via Sequelize, try raw SQL (for all users including existing ones)
       if (!user) {
         try {
           const { pool } = require('../config/database');
-          console.log('Trying raw SQL approach for trial users...');
-          const userResult = await pool.query(
-            'SELECT * FROM users WHERE email = $1 AND status = $2',
-            [email, 'active']
-          );
+          console.log('Trying raw SQL approach for all users...');
+
+          // Try to find user with either password or password_hash column
+          const userResult = await pool.query(`
+            SELECT *,
+                   CASE
+                     WHEN password IS NOT NULL THEN password
+                     WHEN password_hash IS NOT NULL THEN password_hash
+                     ELSE NULL
+                   END as user_password
+            FROM users
+            WHERE email = $1 AND status = $2
+          `, [email, 'active']);
 
           if (userResult.rows.length > 0) {
             user = userResult.rows[0];
             isSequelizeUser = false;
-            console.log('Found user via raw SQL (trial user)');
+            console.log('Found user via raw SQL:', {
+              id: user.id,
+              email: user.email,
+              hasPassword: !!user.password,
+              hasPasswordHash: !!user.password_hash,
+              hasUserPassword: !!user.user_password
+            });
           }
         } catch (sqlError) {
           console.log('Raw SQL approach also failed:', sqlError.message);
@@ -142,17 +156,40 @@ router.post('/login',
         status: isSequelizeUser ? user.status : user.status
       });
 
-      // Validate password (different approaches for different user types)
+      // Validate password (unified approach for all user types)
       console.log('Validating password...');
       let isValidPassword = false;
 
       if (isSequelizeUser) {
-        // Use Sequelize method for existing users
-        isValidPassword = await user.validatePassword(password);
+        // Use Sequelize method for existing users found via ORM
+        try {
+          isValidPassword = await user.validatePassword(password);
+        } catch (sequelizePasswordError) {
+          console.log('Sequelize password validation failed, trying bcrypt:', sequelizePasswordError.message);
+          // Fallback to bcrypt if Sequelize method fails
+          const bcrypt = require('bcryptjs');
+          const userPassword = user.password_hash || user.password;
+          if (userPassword) {
+            isValidPassword = await bcrypt.compare(password, userPassword);
+          }
+        }
       } else {
-        // Use bcrypt directly for trial users
+        // Use bcrypt directly for users found via raw SQL
         const bcrypt = require('bcryptjs');
-        isValidPassword = await bcrypt.compare(password, user.password);
+        const userPassword = user.user_password || user.password || user.password_hash;
+
+        console.log('Checking password with bcrypt:', {
+          hasUserPassword: !!user.user_password,
+          hasPassword: !!user.password,
+          hasPasswordHash: !!user.password_hash,
+          usingPassword: !!userPassword
+        });
+
+        if (userPassword) {
+          isValidPassword = await bcrypt.compare(password, userPassword);
+        } else {
+          console.log('ERROR: No password found for user');
+        }
       }
 
       console.log('Password valid:', isValidPassword);
