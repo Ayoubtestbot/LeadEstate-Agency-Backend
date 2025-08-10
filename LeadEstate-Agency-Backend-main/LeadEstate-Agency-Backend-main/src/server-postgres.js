@@ -1753,7 +1753,7 @@ app.use('/api/advanced-analytics', advancedAnalyticsRoutes);
 const ownerIntegrationRoutes = require('./routes/owner-integration');
 app.use('/api/owner-integration', ownerIntegrationRoutes);
 
-// SaaS Trial and Subscription routes
+// SaaS Trial and Subscription routes - DEPLOYED
 const trialAuthRoutes = require('./routes/trial-auth');
 app.use('/api/auth', trialAuthRoutes);
 
