@@ -12,7 +12,7 @@ const { connectDatabase } = require('./database/connection');
 const { setupAssociations } = require('./models');
 const logger = require('./utils/logger');
 const errorHandler = require('./middleware/errorHandler');
-const authMiddleware = require('./middleware/auth');
+const { authMiddleware } = require('./middleware/auth');
 
 // Import routes
 const authRoutes = require('./routes/auth');
