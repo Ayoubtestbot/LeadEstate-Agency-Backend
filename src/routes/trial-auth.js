@@ -81,12 +81,14 @@ router.post('/trial-signup', [
     const trialEndDate = new Date();
     trialEndDate.setDate(trialEndDate.getDate() + 14); // 14-day trial
 
+    console.log('🔍 Creating trial user:', { email, firstName, lastName, companyName });
+
     const userResult = await pool.query(`
       INSERT INTO users (
-        id, email, password, first_name, last_name, role, status,
+        id, email, password_hash, first_name, last_name, role, status,
         agency_id, subscription_status, trial_end_date, plan_name,
-        email_verified, created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW())
+        created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
       RETURNING id, email, first_name, last_name, role, agency_id, subscription_status, trial_end_date
     `, [
       userId,
@@ -99,22 +101,24 @@ router.post('/trial-signup', [
       agencyId,
       'trial',
       trialEndDate,
-      'starter',
-      true // Auto-verify trial users
+      'starter'
     ]);
+
+    console.log('✅ User created successfully:', userResult.rows[0]);
 
     const newUser = userResult.rows[0];
 
     // Create agency record for the trial user
+    console.log('🔍 Creating agency:', { agencyId, companyName, email, userId });
+
     await pool.query(`
       INSERT INTO agencies (
-        id, name, email, manager_id, status, settings, created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+        id, name, email, status, settings, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
     `, [
       agencyId,
       companyName || `${firstName} ${lastName}'s Agency`,
       email,
-      userId,
       'active',
       JSON.stringify({
         trial: true,
@@ -127,6 +131,8 @@ router.post('/trial-signup', [
         }
       })
     ]);
+
+    console.log('✅ Agency created successfully');
 
     // Generate JWT token
     const token = jwt.sign(
