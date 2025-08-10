@@ -210,10 +210,16 @@ router.post('/login',
       });
 
     } catch (error) {
+      console.error('❌ Login error details:', {
+        message: error.message,
+        stack: error.stack,
+        code: error.code
+      });
       logger.error('Login error:', error);
       res.status(500).json({
         success: false,
-        message: 'Internal server error'
+        message: 'Internal server error',
+        error: error.message // Include error message for debugging
       });
     }
   }
@@ -581,10 +587,10 @@ router.post('/owner/login', [
       }
     }
 
-    // Find owner by email
+    // Find owner in unified users table
     const ownerResult = await pool.query(
-      'SELECT * FROM owners WHERE email = $1 AND status = $2',
-      [email, 'active']
+      'SELECT * FROM users WHERE email = $1 AND status = $2 AND role = $3',
+      [email, 'active', 'owner']
     );
 
     if (ownerResult.rows.length === 0) {
@@ -611,7 +617,7 @@ router.post('/owner/login', [
 
     // Update last login time
     await pool.query(
-      'UPDATE owners SET last_login_at = NOW() WHERE id = $1',
+      'UPDATE users SET last_login_at = NOW(), updated_at = NOW() WHERE id = $1',
       [owner.id]
     );
 
@@ -646,10 +652,16 @@ router.post('/owner/login', [
     });
 
   } catch (error) {
+    console.error('❌ Owner login error details:', {
+      message: error.message,
+      stack: error.stack,
+      code: error.code
+    });
     logger.error('Owner login error:', error);
     res.status(500).json({
       success: false,
-      message: 'Internal server error'
+      message: 'Internal server error',
+      error: error.message // Include error message for debugging
     });
   }
 });
