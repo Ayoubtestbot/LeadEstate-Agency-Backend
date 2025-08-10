@@ -14,21 +14,33 @@ const logger = require('./utils/logger');
 const errorHandler = require('./middleware/errorHandler');
 const { authMiddleware } = require('./middleware/auth');
 
-// Import routes
-const authRoutes = require('./routes/auth');
-const userRoutes = require('./routes/users');
-const leadRoutes = require('./routes/leads');
-const propertyRoutes = require('./routes/properties');
-const teamRoutes = require('./routes/team');
-const analyticsRoutes = require('./routes/analytics');
-const automationRoutes = require('./routes/automation');
-const integrationRoutes = require('./routes/integrations');
-const webhookRoutes = require('./routes/webhooks');
-const uploadRoutes = require('./routes/upload');
+// Import routes with error handling
+let authRoutes, userRoutes, leadRoutes, propertyRoutes, teamRoutes, analyticsRoutes, automationRoutes, integrationRoutes, webhookRoutes, uploadRoutes;
+let trialAuthRoutes, subscriptionRoutes;
 
-// SaaS Trial and Subscription routes
-const trialAuthRoutes = require('./routes/trial-auth');
-const subscriptionRoutes = require('./routes/subscription');
+try {
+  authRoutes = require('./routes/auth');
+  userRoutes = require('./routes/users');
+  leadRoutes = require('./routes/leads');
+  propertyRoutes = require('./routes/properties');
+  teamRoutes = require('./routes/team');
+  analyticsRoutes = require('./routes/analytics');
+  automationRoutes = require('./routes/automation');
+  integrationRoutes = require('./routes/integrations');
+  webhookRoutes = require('./routes/webhooks');
+  uploadRoutes = require('./routes/upload');
+  console.log('✅ Basic routes imported successfully');
+} catch (error) {
+  console.error('❌ Error importing basic routes:', error.message);
+}
+
+try {
+  trialAuthRoutes = require('./routes/trial-auth');
+  subscriptionRoutes = require('./routes/subscription');
+  console.log('✅ SaaS routes imported successfully');
+} catch (error) {
+  console.error('❌ Error importing SaaS routes:', error.message);
+}
 
 // Import subscription middleware with error handling
 let checkSubscriptionStatus, addTrialInfo;
@@ -203,7 +215,7 @@ app.use(errorHandler);
 
 // Database connection and server startup
 const PORT = process.env.PORT || 6001;
-const HOST = process.env.HOST || 'localhost';
+const HOST = process.env.HOST || '0.0.0.0';
 
 async function startServer() {
   try {
