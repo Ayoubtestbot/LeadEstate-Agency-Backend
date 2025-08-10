@@ -847,14 +847,24 @@ router.post('/setup-database', async (req, res) => {
       console.log('Note: Some SaaS columns may already exist:', error.message);
     });
 
-    // Insert default subscription plans
-    await pool.query(`
-      INSERT INTO subscription_plans (name, display_name, description, monthly_price, quarterly_price, semi_annual_price, annual_price, max_leads, max_users, features) VALUES
-      ('starter', 'Starter Plan', 'Perfect for small agencies getting started', 99.00, 267.00, 495.00, 950.00, 1000, 3, '{"whatsapp": false, "analytics": "basic", "branding": "none", "api_access": false}'),
-      ('pro', 'Pro Plan', 'Ideal for growing agencies with advanced needs', 199.00, 537.00, 995.00, 1900.00, 5000, 10, '{"whatsapp": true, "analytics": "advanced", "branding": "basic", "api_access": true, "google_sheets": true}'),
-      ('agency', 'Agency Plan', 'Complete white-label solution for large agencies', 399.00, 1077.00, 1995.00, 3800.00, NULL, NULL, '{"whatsapp": true, "analytics": "enterprise", "branding": "full", "api_access": true, "google_sheets": true, "white_label": true, "custom_domain": true}')
-      ON CONFLICT (name) DO NOTHING
-    `);
+    // Insert default subscription plans (check if they exist first)
+    const existingPlans = await pool.query('SELECT name FROM subscription_plans');
+    const existingPlanNames = existingPlans.rows.map(row => row.name);
+
+    const plansToInsert = [
+      { name: 'starter', display_name: 'Starter Plan', description: 'Perfect for small agencies getting started', monthly_price: 99.00, quarterly_price: 267.00, semi_annual_price: 495.00, annual_price: 950.00, max_leads: 1000, max_users: 3, features: '{"whatsapp": false, "analytics": "basic", "branding": "none", "api_access": false}' },
+      { name: 'pro', display_name: 'Pro Plan', description: 'Ideal for growing agencies with advanced needs', monthly_price: 199.00, quarterly_price: 537.00, semi_annual_price: 995.00, annual_price: 1900.00, max_leads: 5000, max_users: 10, features: '{"whatsapp": true, "analytics": "advanced", "branding": "basic", "api_access": true, "google_sheets": true}' },
+      { name: 'agency', display_name: 'Agency Plan', description: 'Complete white-label solution for large agencies', monthly_price: 399.00, quarterly_price: 1077.00, semi_annual_price: 1995.00, annual_price: 3800.00, max_leads: null, max_users: null, features: '{"whatsapp": true, "analytics": "enterprise", "branding": "full", "api_access": true, "google_sheets": true, "white_label": true, "custom_domain": true}' }
+    ];
+
+    for (const plan of plansToInsert) {
+      if (!existingPlanNames.includes(plan.name)) {
+        await pool.query(`
+          INSERT INTO subscription_plans (name, display_name, description, monthly_price, quarterly_price, semi_annual_price, annual_price, max_leads, max_users, features)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        `, [plan.name, plan.display_name, plan.description, plan.monthly_price, plan.quarterly_price, plan.semi_annual_price, plan.annual_price, plan.max_leads, plan.max_users, plan.features]);
+      }
+    }
 
     console.log('✅ Database tables created successfully with SaaS support');
 
