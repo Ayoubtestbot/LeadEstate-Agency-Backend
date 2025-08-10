@@ -229,6 +229,15 @@ try {
   console.error('❌ Failed to register subscription routes:', error.message);
 }
 
+// Owner Integration routes for dashboard
+try {
+  const ownerIntegrationRoutes = require('./routes/owner-integration');
+  app.use('/api/owner-integration', ownerIntegrationRoutes);
+  console.log('✅ Owner integration routes registered');
+} catch (error) {
+  console.error('❌ Failed to register owner integration routes:', error.message);
+}
+
 // Protected routes with subscription middleware
 app.use('/api/users', authMiddleware, checkSubscriptionStatus, userRoutes);
 app.use('/api/leads', authMiddleware, checkSubscriptionStatus, addTrialInfo, leadRoutes);
