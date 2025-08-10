@@ -78,38 +78,19 @@ router.post('/login',
       console.log('Headers:', req.headers);
       console.log('Body:', req.body);
 
-      // Get models
-      const models = getModels();
-      if (!models || !models.User) {
-        console.log('ERROR: Models not available');
-        return res.status(500).json({
-          success: false,
-          message: 'Database not initialized'
-        });
-      }
+      // Use raw SQL query to find user (compatible with trial users)
+      const { pool } = require('../config/database');
 
-      // Find user by email and agency
-      console.log('Searching for user with:', { email, agency_id: agencyId, status: 'active' });
-      const user = await models.User.findOne({
-        where: {
-          email,
-          agency_id: agencyId,
-          status: 'active'
-        }
-      });
+      console.log('Searching for user with email:', email);
+      const userResult = await pool.query(
+        'SELECT * FROM users WHERE email = $1 AND status = $2',
+        [email, 'active']
+      );
 
-      console.log('User found:', !!user);
-      if (user) {
-        console.log('User details:', {
-          id: user.id,
-          email: user.email,
-          agency_id: user.agency_id,
-          status: user.status
-        });
-      }
+      console.log('User found:', userResult.rows.length > 0);
 
-      if (!user) {
-        console.log('ERROR: User not found with provided criteria');
+      if (userResult.rows.length === 0) {
+        console.log('ERROR: User not found');
         logger.warn(`Failed login attempt for email: ${email}`);
         return res.status(401).json({
           success: false,
@@ -117,9 +98,19 @@ router.post('/login',
         });
       }
 
-      // Validate password
+      const user = userResult.rows[0];
+      console.log('User details:', {
+        id: user.id,
+        email: user.email,
+        agency_id: user.agency_id,
+        status: user.status,
+        subscription_status: user.subscription_status
+      });
+
+      // Validate password using bcrypt
       console.log('Validating password...');
-      const isValidPassword = await user.validatePassword(password);
+      const bcrypt = require('bcryptjs');
+      const isValidPassword = await bcrypt.compare(password, user.password);
       console.log('Password valid:', isValidPassword);
 
       if (!isValidPassword) {
@@ -133,12 +124,35 @@ router.post('/login',
 
       // Update last login
       console.log('Updating last login...');
-      await user.update({ last_login: new Date() });
+      await pool.query(
+        'UPDATE users SET last_login_at = NOW() WHERE id = $1',
+        [user.id]
+      );
 
-      // Generate tokens
+      // Generate tokens using JWT directly
       console.log('Generating tokens...');
-      const token = generateToken(user);
-      const refreshToken = generateRefreshToken(user);
+      const jwt = require('jsonwebtoken');
+
+      const tokenPayload = {
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+        agencyId: user.agency_id,
+        subscriptionStatus: user.subscription_status || 'trial',
+        trialEndDate: user.trial_end_date
+      };
+
+      const token = jwt.sign(
+        tokenPayload,
+        process.env.JWT_SECRET,
+        { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+      );
+
+      const refreshToken = jwt.sign(
+        { userId: user.id },
+        process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
+        { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '30d' }
+      );
 
       console.log('LOGIN SUCCESS for user:', user.id);
       logger.info(`User logged in successfully: ${user.id}`);
@@ -147,7 +161,17 @@ router.post('/login',
         success: true,
         message: 'Login successful',
         data: {
-          user: user.toJSON(),
+          user: {
+            id: user.id,
+            email: user.email,
+            firstName: user.first_name,
+            lastName: user.last_name,
+            role: user.role,
+            agencyId: user.agency_id,
+            subscriptionStatus: user.subscription_status,
+            trialEndDate: user.trial_end_date,
+            planName: user.plan_name
+          },
           token,
           refreshToken,
           expiresIn: process.env.JWT_EXPIRES_IN || '7d'
