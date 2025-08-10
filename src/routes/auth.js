@@ -78,19 +78,55 @@ router.post('/login',
       console.log('Headers:', req.headers);
       console.log('Body:', req.body);
 
-      // Use raw SQL query to find user (compatible with trial users)
-      const { pool } = require('../config/database');
+      // Try both approaches: Sequelize models first (for existing users), then raw SQL (for trial users)
+      let user = null;
+      let isSequelizeUser = false;
 
-      console.log('Searching for user with email:', email);
-      const userResult = await pool.query(
-        'SELECT * FROM users WHERE email = $1 AND status = $2',
-        [email, 'active']
-      );
+      try {
+        // First, try Sequelize models (for existing users)
+        const models = getModels();
+        if (models && models.User) {
+          console.log('Trying Sequelize approach for existing users...');
+          const sequelizeUser = await models.User.findOne({
+            where: {
+              email,
+              agency_id: agencyId,
+              status: 'active'
+            }
+          });
 
-      console.log('User found:', userResult.rows.length > 0);
+          if (sequelizeUser) {
+            user = sequelizeUser;
+            isSequelizeUser = true;
+            console.log('Found user via Sequelize (existing user)');
+          }
+        }
+      } catch (sequelizeError) {
+        console.log('Sequelize approach failed, trying raw SQL:', sequelizeError.message);
+      }
 
-      if (userResult.rows.length === 0) {
-        console.log('ERROR: User not found');
+      // If not found via Sequelize, try raw SQL (for trial users)
+      if (!user) {
+        try {
+          const { pool } = require('../config/database');
+          console.log('Trying raw SQL approach for trial users...');
+          const userResult = await pool.query(
+            'SELECT * FROM users WHERE email = $1 AND status = $2',
+            [email, 'active']
+          );
+
+          if (userResult.rows.length > 0) {
+            user = userResult.rows[0];
+            isSequelizeUser = false;
+            console.log('Found user via raw SQL (trial user)');
+          }
+        } catch (sqlError) {
+          console.log('Raw SQL approach also failed:', sqlError.message);
+        }
+      }
+
+      if (!user) {
+        console.log('ERROR: User not found with either approach');
         logger.warn(`Failed login attempt for email: ${email}`);
         return res.status(401).json({
           success: false,
@@ -98,80 +134,117 @@ router.post('/login',
         });
       }
 
-      const user = userResult.rows[0];
+      console.log('User found via:', isSequelizeUser ? 'Sequelize' : 'Raw SQL');
       console.log('User details:', {
-        id: user.id,
-        email: user.email,
-        agency_id: user.agency_id,
-        status: user.status,
-        subscription_status: user.subscription_status
+        id: isSequelizeUser ? user.id : user.id,
+        email: isSequelizeUser ? user.email : user.email,
+        agency_id: isSequelizeUser ? user.agency_id : user.agency_id,
+        status: isSequelizeUser ? user.status : user.status
       });
 
-      // Validate password using bcrypt
+      // Validate password (different approaches for different user types)
       console.log('Validating password...');
-      const bcrypt = require('bcryptjs');
-      const isValidPassword = await bcrypt.compare(password, user.password);
+      let isValidPassword = false;
+
+      if (isSequelizeUser) {
+        // Use Sequelize method for existing users
+        isValidPassword = await user.validatePassword(password);
+      } else {
+        // Use bcrypt directly for trial users
+        const bcrypt = require('bcryptjs');
+        isValidPassword = await bcrypt.compare(password, user.password);
+      }
+
       console.log('Password valid:', isValidPassword);
 
       if (!isValidPassword) {
         console.log('ERROR: Password validation failed');
-        logger.warn(`Failed login attempt for user: ${user.id}`);
+        logger.warn(`Failed login attempt for user: ${isSequelizeUser ? user.id : user.id}`);
         return res.status(401).json({
           success: false,
           message: 'Invalid email or password'
         });
       }
 
-      // Update last login
+      // Update last login (different approaches for different user types)
       console.log('Updating last login...');
-      await pool.query(
-        'UPDATE users SET last_login_at = NOW() WHERE id = $1',
-        [user.id]
-      );
+      if (isSequelizeUser) {
+        // Use Sequelize method for existing users
+        await user.update({ last_login: new Date() });
+      } else {
+        // Use raw SQL for trial users
+        const { pool } = require('../config/database');
+        await pool.query(
+          'UPDATE users SET last_login_at = NOW() WHERE id = $1',
+          [user.id]
+        );
+      }
 
-      // Generate tokens using JWT directly
+      // Generate tokens (unified approach)
       console.log('Generating tokens...');
-      const jwt = require('jsonwebtoken');
+      let token, refreshToken;
 
-      const tokenPayload = {
-        userId: user.id,
+      if (isSequelizeUser) {
+        // Use existing token generation functions for Sequelize users
+        token = generateToken(user);
+        refreshToken = generateRefreshToken(user);
+      } else {
+        // Use JWT directly for trial users
+        const jwt = require('jsonwebtoken');
+
+        const tokenPayload = {
+          userId: user.id,
+          email: user.email,
+          role: user.role,
+          agencyId: user.agency_id,
+          subscriptionStatus: user.subscription_status || 'trial',
+          trialEndDate: user.trial_end_date
+        };
+
+        token = jwt.sign(
+          tokenPayload,
+          process.env.JWT_SECRET,
+          { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+        );
+
+        refreshToken = jwt.sign(
+          { userId: user.id },
+          process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
+          { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '30d' }
+        );
+      }
+
+      console.log('LOGIN SUCCESS for user:', isSequelizeUser ? user.id : user.id);
+      logger.info(`User logged in successfully: ${isSequelizeUser ? user.id : user.id}`);
+
+      // Prepare user data (unified format)
+      const userData = isSequelizeUser ? {
+        id: user.id,
         email: user.email,
+        firstName: user.first_name,
+        lastName: user.last_name,
         role: user.role,
         agencyId: user.agency_id,
-        subscriptionStatus: user.subscription_status || 'trial',
-        trialEndDate: user.trial_end_date
+        subscriptionStatus: user.subscription_status,
+        trialEndDate: user.trial_end_date,
+        planName: user.plan_name
+      } : {
+        id: user.id,
+        email: user.email,
+        firstName: user.first_name,
+        lastName: user.last_name,
+        role: user.role,
+        agencyId: user.agency_id,
+        subscriptionStatus: user.subscription_status,
+        trialEndDate: user.trial_end_date,
+        planName: user.plan_name
       };
-
-      const token = jwt.sign(
-        tokenPayload,
-        process.env.JWT_SECRET,
-        { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
-      );
-
-      const refreshToken = jwt.sign(
-        { userId: user.id },
-        process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
-        { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '30d' }
-      );
-
-      console.log('LOGIN SUCCESS for user:', user.id);
-      logger.info(`User logged in successfully: ${user.id}`);
 
       res.json({
         success: true,
         message: 'Login successful',
         data: {
-          user: {
-            id: user.id,
-            email: user.email,
-            firstName: user.first_name,
-            lastName: user.last_name,
-            role: user.role,
-            agencyId: user.agency_id,
-            subscriptionStatus: user.subscription_status,
-            trialEndDate: user.trial_end_date,
-            planName: user.plan_name
-          },
+          user: isSequelizeUser ? user.toJSON() : userData,
           token,
           refreshToken,
           expiresIn: process.env.JWT_EXPIRES_IN || '7d'
