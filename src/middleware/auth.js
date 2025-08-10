@@ -59,16 +59,49 @@ const authMiddleware = async (req, res, next) => {
       });
     }
 
-    // Find user in database
-    const [results] = await sequelize.query(
-      'SELECT id, email, first_name, last_name, role, agency_id, is_active FROM users WHERE id = :userId AND is_active = true',
-      {
-        replacements: { userId: decoded.userId },
-        type: sequelize.QueryTypes.SELECT,
+    // Find user in database (try both approaches for compatibility)
+    let results = null;
+
+    console.log('🔍 Auth middleware - looking for user:', decoded.userId);
+
+    try {
+      // Try the existing Sequelize query first
+      const sequelizeResults = await sequelize.query(
+        'SELECT id, email, first_name, last_name, role, agency_id, is_active, status, subscription_status, trial_end_date, plan_name FROM users WHERE id = :userId AND (is_active = true OR status = \'active\')',
+        {
+          replacements: { userId: decoded.userId },
+          type: sequelize.QueryTypes.SELECT,
+        }
+      );
+
+      if (sequelizeResults && sequelizeResults.length > 0) {
+        results = sequelizeResults[0];
+        console.log('✅ User found via Sequelize query');
       }
-    );
+    } catch (sequelizeError) {
+      console.log('Sequelize query failed, trying raw pool:', sequelizeError.message);
+    }
+
+    // If not found via Sequelize, try raw SQL (for trial users)
+    if (!results) {
+      try {
+        const { pool } = require('../config/database');
+        const userResult = await pool.query(
+          'SELECT id, email, first_name, last_name, role, agency_id, status, subscription_status, trial_end_date, plan_name FROM users WHERE id = $1 AND status = $2',
+          [decoded.userId, 'active']
+        );
+
+        if (userResult.rows.length > 0) {
+          results = userResult.rows[0];
+          console.log('✅ User found via raw SQL query');
+        }
+      } catch (poolError) {
+        console.log('Raw SQL query also failed:', poolError.message);
+      }
+    }
 
     if (!results) {
+      console.log('❌ User not found with either approach');
       return res.status(HTTP_STATUS.UNAUTHORIZED).json({
         success: false,
         error: {
@@ -80,16 +113,28 @@ const authMiddleware = async (req, res, next) => {
       });
     }
 
-    // Attach user to request
+    // Attach user to request with unified format
     req.user = {
+      userId: results.id,
       id: results.id,
       email: results.email,
       firstName: results.first_name,
       lastName: results.last_name,
       role: results.role,
       agencyId: results.agency_id,
-      isActive: results.is_active,
+      isActive: results.is_active || (results.status === 'active'),
+      status: results.status,
+      subscriptionStatus: results.subscription_status || decoded.subscriptionStatus,
+      trialEndDate: results.trial_end_date || decoded.trialEndDate,
+      planName: results.plan_name || decoded.planName
     };
+
+    console.log('✅ Auth middleware - user attached:', {
+      userId: req.user.userId,
+      email: req.user.email,
+      agencyId: req.user.agencyId,
+      subscriptionStatus: req.user.subscriptionStatus
+    });
 
     // Log successful authentication
     logger.debug(`User authenticated: ${req.user.email} (${req.user.role})`);

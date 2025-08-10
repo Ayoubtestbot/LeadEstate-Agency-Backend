@@ -247,6 +247,15 @@ app.use('/api/analytics', authMiddleware, checkSubscriptionStatus, analyticsRout
 app.use('/api/automation', authMiddleware, checkSubscriptionStatus, automationRoutes);
 app.use('/api/integrations', authMiddleware, checkSubscriptionStatus, integrationRoutes);
 app.use('/api/upload', authMiddleware, checkSubscriptionStatus, uploadRoutes);
+
+// Dashboard route (for agency frontend)
+try {
+  const dashboardRoutes = require('./routes/dashboard');
+  app.use('/api/dashboard', authMiddleware, checkSubscriptionStatus, dashboardRoutes);
+  console.log('✅ Dashboard routes registered');
+} catch (error) {
+  console.error('❌ Failed to register dashboard routes:', error.message);
+}
 app.use('/webhooks', webhookRoutes); // No auth for webhooks
 
 // Serve uploaded files
