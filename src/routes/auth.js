@@ -456,7 +456,7 @@ router.post('/owner/login', [
       CREATE TABLE IF NOT EXISTS owners (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         email VARCHAR(255) UNIQUE NOT NULL,
-        password_hash VARCHAR(255) NOT NULL,
+        password VARCHAR(255) NOT NULL,
         first_name VARCHAR(100) NOT NULL,
         last_name VARCHAR(100) NOT NULL,
         role VARCHAR(50) DEFAULT 'owner',
@@ -496,7 +496,7 @@ router.post('/owner/login', [
       try {
         await pool.query(`
           INSERT INTO owners (
-            email, password_hash, first_name, last_name, role, status,
+            email, password, first_name, last_name, role, status,
             company_name, email_verified_at
           ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
         `, [
@@ -513,7 +513,7 @@ router.post('/owner/login', [
         console.log('Falling back to basic insert:', insertError.message);
         await pool.query(`
           INSERT INTO owners (
-            email, password_hash, first_name, last_name, role, status
+            email, password, first_name, last_name, role, status
           ) VALUES ($1, $2, $3, $4, $5, $6)
         `, [
           'owner@leadestate.com',
@@ -544,7 +544,7 @@ router.post('/owner/login', [
 
     // Verify password
     const bcrypt = require('bcryptjs');
-    const isValidPassword = await bcrypt.compare(password, owner.password_hash);
+    const isValidPassword = await bcrypt.compare(password, owner.password);
 
     if (!isValidPassword) {
       logger.warn(`Failed owner login attempt for email: ${email} - invalid password`);

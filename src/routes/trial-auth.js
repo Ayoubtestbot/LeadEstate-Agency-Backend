@@ -85,7 +85,7 @@ router.post('/trial-signup', [
 
     const userResult = await pool.query(`
       INSERT INTO users (
-        id, email, password_hash, first_name, last_name, role, status,
+        id, email, password, first_name, last_name, role, status,
         agency_id, subscription_status, trial_end_date, plan_name,
         created_at, updated_at
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
