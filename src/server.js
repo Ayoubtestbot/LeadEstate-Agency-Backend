@@ -68,10 +68,24 @@ try {
 const app = express();
 const server = createServer(app);
 
+// Define allowed origins for CORS
+const allowedOrigins = [
+  'http://localhost:5001',
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'http://localhost:3002',
+  'http://localhost:3003',
+  'https://lead-estate-owner-dashboard.vercel.app',
+  'https://lead-estate-agency-frontend.vercel.app',
+  'https://leadestate-landing-page.vercel.app',
+  'https://leadestate-owner-dashboard.vercel.app',
+  'https://leadestate-agency-frontend.vercel.app'
+];
+
 // Socket.IO setup for real-time features
 const io = new Server(server, {
   cors: {
-    origin: process.env.CORS_ORIGIN?.split(',') || ['http://localhost:5001'],
+    origin: process.env.CORS_ORIGIN?.split(',') || allowedOrigins,
     credentials: true
   }
 });
@@ -91,10 +105,10 @@ app.use(helmet({
 
 // CORS configuration
 app.use(cors({
-  origin: process.env.CORS_ORIGIN?.split(',') || ['http://localhost:5001'],
+  origin: process.env.CORS_ORIGIN?.split(',') || allowedOrigins,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-owner-api-key']
 }));
 
 // Rate limiting
