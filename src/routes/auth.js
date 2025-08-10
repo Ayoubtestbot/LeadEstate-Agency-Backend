@@ -68,15 +68,11 @@ router.post('/login',
       }
 
       const { email, password } = req.body;
-      const agencyId = process.env.AGENCY_ID || 'default';
 
       // Debug logging
-      console.log('=== LOGIN ATTEMPT DEBUG ===');
+      console.log('=== UNIFIED LOGIN ATTEMPT ===');
       console.log('Email:', email);
       console.log('Password provided:', !!password);
-      console.log('Expected agency_id:', agencyId);
-      console.log('Headers:', req.headers);
-      console.log('Body:', req.body);
 
       // Use ONLY raw SQL for all users (unified approach)
       let user = null;
