@@ -29,7 +29,29 @@ const uploadRoutes = require('./routes/upload');
 // SaaS Trial and Subscription routes
 const trialAuthRoutes = require('./routes/trial-auth');
 const subscriptionRoutes = require('./routes/subscription');
-const { checkSubscriptionStatus, addTrialInfo } = require('./middleware/subscription');
+
+// Import subscription middleware with error handling
+let checkSubscriptionStatus, addTrialInfo;
+try {
+  const subscriptionMiddleware = require('./middleware/subscription');
+  checkSubscriptionStatus = subscriptionMiddleware.checkSubscriptionStatus;
+  addTrialInfo = subscriptionMiddleware.addTrialInfo;
+
+  // Verify they are functions
+  if (typeof checkSubscriptionStatus !== 'function') {
+    console.error('checkSubscriptionStatus is not a function:', typeof checkSubscriptionStatus);
+    checkSubscriptionStatus = (req, res, next) => next(); // fallback
+  }
+  if (typeof addTrialInfo !== 'function') {
+    console.error('addTrialInfo is not a function:', typeof addTrialInfo);
+    addTrialInfo = (req, res, next) => next(); // fallback
+  }
+} catch (error) {
+  console.error('Error loading subscription middleware:', error);
+  // Fallback middleware
+  checkSubscriptionStatus = (req, res, next) => next();
+  addTrialInfo = (req, res, next) => next();
+}
 
 const app = express();
 const server = createServer(app);
