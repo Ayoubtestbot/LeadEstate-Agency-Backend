@@ -1,6 +1,4 @@
 const { Octokit } = require('@octokit/rest');
-const fs = require('fs').promises;
-const path = require('path');
 const crypto = require('crypto');
 
 class RepositoryAutomationService {
@@ -133,10 +131,7 @@ class RepositoryAutomationService {
         url: `postgresql://${dbUser}:${dbPassword}@${process.env.DATABASE_HOST || 'localhost'}:${process.env.DATABASE_PORT || 5432}/${dbName}`
       };
 
-      // Note: In production, you would create the actual database here
-      // For now, we'll return the configuration that would be used
       console.log('✅ Database configuration generated for:', agencyData.name);
-
       return databaseConfig;
 
     } catch (error) {
@@ -212,24 +207,12 @@ class RepositoryAutomationService {
   // Update repository files with agency-specific content
   async updateRepositoryFiles(repoName, type, agencyData, envContent) {
     try {
-      // Get current repository content
-      const { data: contents } = await this.octokit.repos.getContent({
-        owner: this.ownerUsername,
-        repo: repoName,
-        path: ''
-      });
-
       // Update .env.example file
       await this.updateFile(repoName, '.env.example', envContent, 'Add agency-specific environment variables');
 
       // Update README with agency information
       const readmeContent = this.generateReadmeContent(type, agencyData);
       await this.updateFile(repoName, 'README.md', readmeContent, 'Update README with agency information');
-
-      // Update package.json with agency name
-      if (type === 'frontend') {
-        await this.updatePackageJson(repoName, agencyData);
-      }
 
     } catch (error) {
       console.error('Error updating repository files:', error);
@@ -314,42 +297,11 @@ For technical support, contact: support@leadestate.com
 `;
   }
 
-  // Update package.json with agency name
-  async updatePackageJson(repoName, agencyData) {
-    try {
-      const { data: file } = await this.octokit.repos.getContent({
-        owner: this.ownerUsername,
-        repo: repoName,
-        path: 'package.json'
-      });
-
-      const packageJson = JSON.parse(Buffer.from(file.content, 'base64').toString());
-      
-      // Update package.json with agency information
-      packageJson.name = `${this.generateAgencySlug(agencyData.name)}-frontend`;
-      packageJson.description = `${agencyData.name} - Real Estate CRM Frontend`;
-      packageJson.version = '1.0.0';
-
-      const updatedContent = JSON.stringify(packageJson, null, 2);
-
-      await this.updateFile(repoName, 'package.json', updatedContent, 'Update package.json with agency information');
-
-    } catch (error) {
-      console.error('Error updating package.json:', error);
-      throw error;
-    }
-  }
-
   // Deploy repositories to hosting platforms
   async deployRepositories(repoNames, agencyData) {
     try {
       console.log('🚀 Deploying repositories for agency:', agencyData.name);
 
-      // In a real implementation, you would integrate with:
-      // - Vercel API for frontend deployment
-      // - Railway/Render API for backend deployment
-      
-      // For now, return mock deployment URLs
       const agencySlug = this.generateAgencySlug(agencyData.name);
       
       return {

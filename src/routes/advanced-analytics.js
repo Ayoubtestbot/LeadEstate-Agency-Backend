@@ -1,369 +1,143 @@
 const express = require('express');
 const router = express.Router();
-const advancedAnalyticsService = require('../services/advancedAnalyticsService');
-const auditService = require('../services/auditService');
+const { getSequelize } = require('../database/connection');
 
-// GET /api/advanced-analytics/agency/:agencyId - Get comprehensive agency analytics
-router.get('/agency/:agencyId', async (req, res) => {
+// Simple advanced analytics routes for single-tenant mode
+// These are simplified versions that work with your existing system
+
+// GET /api/advanced-analytics/dashboard - Get dashboard analytics (placeholder)
+router.get('/dashboard', async (req, res) => {
   try {
-    const { agencyId } = req.params;
-    const { period = 'month' } = req.query;
-
-    // Validate period
-    const validPeriods = ['week', 'month', 'quarter', 'year'];
-    if (!validPeriods.includes(period)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid period. Must be: week, month, quarter, or year'
-      });
-    }
-
-    const result = await advancedAnalyticsService.getAgencyPerformance(agencyId, period);
-
-    if (!result.success) {
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to fetch agency analytics',
-        error: result.error
-      });
-    }
-
-    // Log analytics access
-    await auditService.log({
-      userId: req.user?.id,
-      action: 'analytics_viewed',
-      resourceType: 'agency',
-      resourceId: agencyId,
-      details: { period, type: 'performance' },
-      ipAddress: req.ip,
-      userAgent: req.get('User-Agent'),
-      agencyId
-    });
-
-    res.json({
-      success: true,
-      data: result.data,
-      agencyId,
-      period
-    });
-
-  } catch (error) {
-    console.error('Error fetching agency analytics:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch agency analytics',
-      error: error.message
-    });
-  }
-});
-
-// GET /api/advanced-analytics/user-activity - Get user activity analytics
-router.get('/user-activity', async (req, res) => {
-  try {
-    const { agencyId, days = 30 } = req.query;
-
-    // Validate days parameter
-    const daysInt = parseInt(days);
-    if (isNaN(daysInt) || daysInt < 1 || daysInt > 365) {
-      return res.status(400).json({
-        success: false,
-        message: 'Days must be a number between 1 and 365'
-      });
-    }
-
-    const result = await advancedAnalyticsService.getUserActivityAnalytics(agencyId, daysInt);
-
-    if (!result.success) {
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to fetch user activity analytics',
-        error: result.error
-      });
-    }
-
-    // Log analytics access
-    await auditService.log({
-      userId: req.user?.id,
-      action: 'analytics_viewed',
-      resourceType: 'user_activity',
-      details: { days: daysInt, agencyId },
-      ipAddress: req.ip,
-      userAgent: req.get('User-Agent'),
-      agencyId
-    });
-
-    res.json({
-      success: true,
-      data: result.data,
-      agencyId,
-      days: daysInt
-    });
-
-  } catch (error) {
-    console.error('Error fetching user activity analytics:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch user activity analytics',
-      error: error.message
-    });
-  }
-});
-
-// GET /api/advanced-analytics/system-health - Get system health analytics
-router.get('/system-health', async (req, res) => {
-  try {
-    const result = await advancedAnalyticsService.getSystemHealthAnalytics();
-
-    if (!result.success) {
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to fetch system health analytics',
-        error: result.error
-      });
-    }
-
-    // Log analytics access
-    await auditService.log({
-      userId: req.user?.id,
-      action: 'analytics_viewed',
-      resourceType: 'system_health',
-      details: { type: 'health_check' },
-      ipAddress: req.ip,
-      userAgent: req.get('User-Agent'),
-      severity: 'info'
-    });
-
-    res.json({
-      success: true,
-      data: result.data
-    });
-
-  } catch (error) {
-    console.error('Error fetching system health analytics:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch system health analytics',
-      error: error.message
-    });
-  }
-});
-
-// POST /api/advanced-analytics/clear-cache - Clear analytics cache
-router.post('/clear-cache', async (req, res) => {
-  try {
-    const { pattern } = req.body;
-
-    advancedAnalyticsService.clearCache(pattern);
-
-    // Log cache clear action
-    await auditService.log({
-      userId: req.user?.id,
-      action: 'cache_cleared',
-      resourceType: 'analytics',
-      details: { pattern: pattern || 'all' },
-      ipAddress: req.ip,
-      userAgent: req.get('User-Agent'),
-      severity: 'info'
-    });
-
-    res.json({
-      success: true,
-      message: pattern ? `Cache cleared for pattern: ${pattern}` : 'All analytics cache cleared'
-    });
-
-  } catch (error) {
-    console.error('Error clearing analytics cache:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to clear analytics cache',
-      error: error.message
-    });
-  }
-});
-
-// GET /api/advanced-analytics/cache-stats - Get cache statistics
-router.get('/cache-stats', async (req, res) => {
-  try {
-    const stats = advancedAnalyticsService.getCacheStats();
-
-    res.json({
-      success: true,
-      data: stats
-    });
-
-  } catch (error) {
-    console.error('Error fetching cache stats:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch cache statistics',
-      error: error.message
-    });
-  }
-});
-
-// GET /api/advanced-analytics/dashboard/:agencyId - Get dashboard summary
-router.get('/dashboard/:agencyId', async (req, res) => {
-  try {
-    const { agencyId } = req.params;
-
-    // Get multiple analytics in parallel
-    const [
-      performanceResult,
-      activityResult,
-      healthResult
-    ] = await Promise.all([
-      advancedAnalyticsService.getAgencyPerformance(agencyId, 'month'),
-      advancedAnalyticsService.getUserActivityAnalytics(agencyId, 30),
-      advancedAnalyticsService.getSystemHealthAnalytics()
-    ]);
-
-    // Check if any requests failed
-    if (!performanceResult.success || !activityResult.success || !healthResult.success) {
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to fetch complete dashboard data',
-        errors: {
-          performance: performanceResult.error,
-          activity: activityResult.error,
-          health: healthResult.error
-        }
-      });
-    }
-
-    // Create dashboard summary
-    const dashboardData = {
+    const sequelize = getSequelize();
+    
+    // Basic analytics for single-tenant mode
+    const analytics = {
+      totalLeads: 0,
+      totalProperties: 0,
+      conversionRate: 0,
+      avgResponseTime: 0,
+      recentActivity: [],
       performance: {
-        totalLeads: performanceResult.data.leadMetrics.total_leads,
-        conversionRate: performanceResult.data.leadMetrics.closed_leads / 
-                       Math.max(performanceResult.data.leadMetrics.total_leads, 1) * 100,
-        avgResponseTime: performanceResult.data.leadMetrics.avg_response_time_hours,
-        topAgent: performanceResult.data.agentPerformance[0] || null
-      },
-      activity: {
-        activeUsers: activityResult.data.loginActivity.filter(u => u.login_count > 0).length,
-        totalLogins: activityResult.data.loginActivity.reduce((sum, u) => sum + parseInt(u.login_count), 0),
-        mostActiveUser: activityResult.data.mostActiveUsers[0] || null
-      },
-      health: {
-        systemStatus: healthResult.data.errors.error_rate < 5 ? 'healthy' : 'warning',
-        errorRate: healthResult.data.errors.error_rate,
-        dailyLogins: healthResult.data.performance.daily_logins
+        thisMonth: {
+          leads: 0,
+          properties: 0,
+          conversions: 0
+        },
+        lastMonth: {
+          leads: 0,
+          properties: 0,
+          conversions: 0
+        }
       },
       generatedAt: new Date().toISOString()
     };
 
-    // Log dashboard access
-    await auditService.log({
-      userId: req.user?.id,
-      action: 'dashboard_viewed',
-      resourceType: 'agency',
-      resourceId: agencyId,
-      details: { type: 'summary_dashboard' },
-      ipAddress: req.ip,
-      userAgent: req.get('User-Agent'),
-      agencyId
-    });
+    // If you have actual tables, you can query them here:
+    // const [results] = await sequelize.query('SELECT COUNT(*) as count FROM leads');
+    // analytics.totalLeads = results[0].count;
 
     res.json({
       success: true,
-      data: dashboardData,
-      agencyId
+      data: analytics
     });
 
   } catch (error) {
-    console.error('Error fetching dashboard data:', error);
+    console.error('Error fetching dashboard analytics:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to fetch dashboard data',
+      message: 'Failed to fetch dashboard analytics',
       error: error.message
     });
   }
 });
 
-// POST /api/advanced-analytics/export - Export analytics data
-router.post('/export', async (req, res) => {
+// GET /api/advanced-analytics/leads - Get lead analytics (placeholder)
+router.get('/leads', async (req, res) => {
   try {
-    const {
-      agencyId,
-      type, // 'performance', 'activity', 'health'
-      period = 'month',
-      format = 'json'
-    } = req.body;
+    const { period = 'month' } = req.query;
+    
+    const leadAnalytics = {
+      total: 0,
+      new: 0,
+      contacted: 0,
+      qualified: 0,
+      closed: 0,
+      sources: [],
+      trends: [],
+      period,
+      generatedAt: new Date().toISOString()
+    };
 
-    // Validate inputs
-    if (!type || !['performance', 'activity', 'health'].includes(type)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid type. Must be: performance, activity, or health'
-      });
-    }
-
-    if (!['json', 'csv'].includes(format)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid format. Must be: json or csv'
-      });
-    }
-
-    let result;
-    switch (type) {
-      case 'performance':
-        result = await advancedAnalyticsService.getAgencyPerformance(agencyId, period);
-        break;
-      case 'activity':
-        result = await advancedAnalyticsService.getUserActivityAnalytics(agencyId, 30);
-        break;
-      case 'health':
-        result = await advancedAnalyticsService.getSystemHealthAnalytics();
-        break;
-    }
-
-    if (!result.success) {
-      return res.status(500).json({
-        success: false,
-        message: `Failed to export ${type} analytics`,
-        error: result.error
-      });
-    }
-
-    // Set download headers
-    const timestamp = new Date().toISOString().split('T')[0];
-    const filename = `${type}_analytics_${timestamp}.${format}`;
-
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-
-    if (format === 'csv') {
-      res.setHeader('Content-Type', 'text/csv');
-      // Convert to CSV (simplified)
-      const csvData = JSON.stringify(result.data);
-      res.send(csvData);
-    } else {
-      res.setHeader('Content-Type', 'application/json');
-      res.json({
-        success: true,
-        data: result.data,
-        exportedAt: new Date().toISOString(),
-        type,
-        format
-      });
-    }
-
-    // Log export action
-    await auditService.log({
-      userId: req.user?.id,
-      action: 'data_export',
-      resourceType: 'analytics',
-      details: { type, format, agencyId },
-      ipAddress: req.ip,
-      userAgent: req.get('User-Agent'),
-      agencyId
+    res.json({
+      success: true,
+      data: leadAnalytics
     });
 
   } catch (error) {
-    console.error('Error exporting analytics data:', error);
+    console.error('Error fetching lead analytics:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to export analytics data',
+      message: 'Failed to fetch lead analytics',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/advanced-analytics/properties - Get property analytics (placeholder)
+router.get('/properties', async (req, res) => {
+  try {
+    const { period = 'month' } = req.query;
+    
+    const propertyAnalytics = {
+      total: 0,
+      available: 0,
+      sold: 0,
+      avgPrice: 0,
+      priceRanges: [],
+      types: [],
+      period,
+      generatedAt: new Date().toISOString()
+    };
+
+    res.json({
+      success: true,
+      data: propertyAnalytics
+    });
+
+  } catch (error) {
+    console.error('Error fetching property analytics:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch property analytics',
+      error: error.message
+    });
+  }
+});
+
+// POST /api/advanced-analytics/export - Export analytics data (placeholder)
+router.post('/export', async (req, res) => {
+  try {
+    const { type, format = 'json' } = req.body;
+
+    // For single-tenant mode, return empty export
+    const exportData = {
+      type,
+      format,
+      data: [],
+      exportedAt: new Date().toISOString()
+    };
+
+    res.json({
+      success: true,
+      message: 'Analytics export completed',
+      data: exportData
+    });
+
+  } catch (error) {
+    console.error('Error exporting analytics:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to export analytics',
       error: error.message
     });
   }

@@ -5,9 +5,6 @@ const { body, validationResult } = require('express-validator');
 const router = express.Router();
 
 const { pool } = require('../config/database');
-const { getSubscriptionModel } = require('../models/Subscription');
-const { getSubscriptionPlanModel } = require('../models/SubscriptionPlan');
-const { getUserModel } = require('../models/User');
 const logger = require('../utils/logger');
 
 // POST /api/auth/trial-signup - Free trial registration
@@ -75,18 +72,6 @@ router.post('/trial-signup', [
     const saltRounds = 12;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-    // Get starter plan for trial
-    const SubscriptionPlan = getSubscriptionPlanModel();
-    const starterPlan = await SubscriptionPlan.getStarterPlan();
-    
-    if (!starterPlan) {
-      logger.error('Starter plan not found in database');
-      return res.status(500).json({
-        success: false,
-        message: 'Service configuration error. Please try again later.'
-      });
-    }
-
     // Generate unique agency ID for trial user
     const crypto = require('crypto');
     const agencyId = crypto.randomUUID();
@@ -120,10 +105,6 @@ router.post('/trial-signup', [
 
     const newUser = userResult.rows[0];
 
-    // Create subscription record
-    const Subscription = getSubscriptionModel();
-    const subscription = await Subscription.createTrial(userId, starterPlan.id);
-
     // Create agency record for the trial user
     await pool.query(`
       INSERT INTO agencies (
@@ -138,7 +119,12 @@ router.post('/trial-signup', [
       JSON.stringify({
         trial: true,
         plan: 'starter',
-        features: starterPlan.features
+        features: {
+          whatsapp: false,
+          analytics: 'basic',
+          branding: 'none',
+          api_access: false
+        }
       })
     ]);
 
@@ -162,33 +148,6 @@ router.post('/trial-signup', [
     // Calculate trial days remaining
     const daysRemaining = Math.ceil((trialEndDate - new Date()) / (1000 * 60 * 60 * 24));
 
-    // Send welcome email (async, don't wait)
-    setImmediate(async () => {
-      try {
-        // Add to notification queue for welcome email
-        await pool.query(`
-          INSERT INTO notification_queue (
-            user_id, type, recipient_email, subject, template_name, template_data, scheduled_for
-          ) VALUES ($1, $2, $3, $4, $5, $6, NOW())
-        `, [
-          userId,
-          'trial_started',
-          email,
-          'Welcome to your LeadEstate free trial!',
-          'trial_welcome',
-          JSON.stringify({
-            firstName,
-            companyName: companyName || `${firstName} ${lastName}'s Agency`,
-            trialEndDate: trialEndDate.toISOString(),
-            daysRemaining,
-            loginUrl: process.env.FRONTEND_URL || 'https://app.leadestate.com'
-          })
-        ]);
-      } catch (emailError) {
-        logger.error('Failed to queue welcome email:', emailError);
-      }
-    });
-
     res.status(201).json({
       success: true,
       message: 'Trial account created successfully',
@@ -206,7 +165,12 @@ router.post('/trial-signup', [
           plan: 'starter',
           trialEndDate: trialEndDate.toISOString(),
           daysRemaining,
-          features: starterPlan.features
+          features: {
+            whatsapp: false,
+            analytics: 'basic',
+            branding: 'none',
+            api_access: false
+          }
         },
         token
       }
@@ -240,10 +204,8 @@ router.get('/trial-status', async (req, res) => {
     // Get current subscription status
     const userQuery = await pool.query(`
       SELECT 
-        u.id, u.email, u.first_name, u.last_name, u.subscription_status, u.trial_end_date, u.plan_name,
-        s.status as subscription_status, s.trial_end_date as sub_trial_end, s.is_trial
+        u.id, u.email, u.first_name, u.last_name, u.subscription_status, u.trial_end_date, u.plan_name
       FROM users u
-      LEFT JOIN subscriptions s ON u.id = s.user_id AND s.status IN ('trial', 'active')
       WHERE u.id = $1
     `, [decoded.userId]);
 
@@ -255,8 +217,8 @@ router.get('/trial-status', async (req, res) => {
     }
 
     const user = userQuery.rows[0];
-    const trialEndDate = user.sub_trial_end || user.trial_end_date;
-    const isTrialActive = user.subscription_status === 'trial' || user.subscription_status === 'trial';
+    const trialEndDate = user.trial_end_date;
+    const isTrialActive = user.subscription_status === 'trial';
     
     let daysRemaining = 0;
     let trialExpired = false;

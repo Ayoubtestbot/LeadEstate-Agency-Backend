@@ -1,7 +1,5 @@
 const jwt = require('jsonwebtoken');
 const { pool } = require('../config/database');
-const { getSubscriptionModel } = require('../models/Subscription');
-const { getSubscriptionPlanModel } = require('../models/SubscriptionPlan');
 const logger = require('../utils/logger');
 
 /**
@@ -30,12 +28,8 @@ const checkSubscriptionStatus = async (req, res, next) => {
     // Get user's current subscription status
     const userQuery = await pool.query(`
       SELECT 
-        u.id, u.email, u.subscription_status, u.trial_end_date, u.plan_name,
-        s.id as subscription_id, s.status as sub_status, s.trial_end_date as sub_trial_end, 
-        s.is_trial, sp.features, sp.max_leads, sp.max_users, sp.max_properties
+        u.id, u.email, u.subscription_status, u.trial_end_date, u.plan_name, u.agency_id
       FROM users u
-      LEFT JOIN subscriptions s ON u.id = s.user_id AND s.status IN ('trial', 'active')
-      LEFT JOIN subscription_plans sp ON s.plan_id = sp.id
       WHERE u.id = $1
     `, [decoded.userId]);
 
@@ -48,8 +42,8 @@ const checkSubscriptionStatus = async (req, res, next) => {
     }
 
     const user = userQuery.rows[0];
-    const trialEndDate = user.sub_trial_end || user.trial_end_date;
-    const subscriptionStatus = user.sub_status || user.subscription_status;
+    const trialEndDate = user.trial_end_date;
+    const subscriptionStatus = user.subscription_status;
 
     // Check if trial has expired
     if (subscriptionStatus === 'trial' && trialEndDate) {
@@ -62,13 +56,6 @@ const checkSubscriptionStatus = async (req, res, next) => {
           'UPDATE users SET subscription_status = $1 WHERE id = $2',
           ['expired', user.id]
         );
-
-        if (user.subscription_id) {
-          await pool.query(
-            'UPDATE subscriptions SET status = $1 WHERE id = $2',
-            ['expired', user.subscription_id]
-          );
-        }
 
         return res.status(402).json({
           success: false,
@@ -95,16 +82,50 @@ const checkSubscriptionStatus = async (req, res, next) => {
       });
     }
 
+    // Get plan features (simplified for now)
+    const planFeatures = {
+      starter: {
+        whatsapp: false,
+        analytics: 'basic',
+        branding: 'none',
+        api_access: false,
+        max_leads: 1000,
+        max_users: 3,
+        max_properties: 100
+      },
+      pro: {
+        whatsapp: true,
+        analytics: 'advanced',
+        branding: 'basic',
+        api_access: true,
+        max_leads: 5000,
+        max_users: 10,
+        max_properties: 500
+      },
+      agency: {
+        whatsapp: true,
+        analytics: 'enterprise',
+        branding: 'full',
+        api_access: true,
+        max_leads: null,
+        max_users: null,
+        max_properties: null
+      }
+    };
+
+    const features = planFeatures[user.plan_name] || planFeatures.starter;
+
     // Attach subscription info to request
     req.subscription = {
       userId: user.id,
+      agencyId: user.agency_id,
       status: subscriptionStatus,
       planName: user.plan_name,
-      features: user.features || {},
+      features: features,
       limits: {
-        maxLeads: user.max_leads,
-        maxUsers: user.max_users,
-        maxProperties: user.max_properties
+        maxLeads: features.max_leads,
+        maxUsers: features.max_users,
+        maxProperties: features.max_properties
       },
       trialEndDate: trialEndDate,
       isActive: ['trial', 'active'].includes(subscriptionStatus)
@@ -185,7 +206,7 @@ const checkUsageLimit = (resourceType) => {
         });
       }
 
-      const { userId, limits } = req.subscription;
+      const { agencyId, limits } = req.subscription;
       const limitKey = `max${resourceType.charAt(0).toUpperCase() + resourceType.slice(1)}`;
       const maxAllowed = limits[limitKey];
 
@@ -214,8 +235,8 @@ const checkUsageLimit = (resourceType) => {
       const countQuery = await pool.query(`
         SELECT COUNT(*) as count 
         FROM ${table} 
-        WHERE agency_id = (SELECT agency_id FROM users WHERE id = $1)
-      `, [userId]);
+        WHERE agency_id = $1
+      `, [agencyId]);
 
       currentCount = parseInt(countQuery.rows[0].count);
 

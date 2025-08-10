@@ -144,92 +144,11 @@ class ReminderService {
         agencyName: user.agency_name
       });
 
-      // Log the reminder
-      await pool.query(`
-        INSERT INTO invitation_logs (user_id, email_type, email_address, email_status, error_message)
-        VALUES ($1, $2, $3, $4, $5)
-      `, [
-        user.id, 
-        `${reminderType}_reminder`, 
-        user.email, 
-        emailResult.success ? 'sent' : 'failed',
-        emailResult.success ? null : emailResult.error
-      ]);
-
       return emailResult.success;
 
     } catch (error) {
       console.error(`Error sending ${reminderType} reminder to ${user.email}:`, error);
       return false;
-    }
-  }
-
-  // Clean up expired invitations
-  async cleanupExpiredInvitations() {
-    try {
-      console.log('🧹 Cleaning up expired invitations...');
-
-      const result = await pool.query(`
-        DELETE FROM users 
-        WHERE status = 'invited' 
-        AND invitation_expires_at < NOW()
-        RETURNING email, first_name, agency_name, invited_by
-      `);
-
-      console.log(`✅ Cleaned up ${result.rows.length} expired invitations`);
-
-      return {
-        success: true,
-        cleanedUp: result.rows.length,
-        details: result.rows
-      };
-
-    } catch (error) {
-      console.error('❌ Error cleaning up expired invitations:', error);
-      return {
-        success: false,
-        error: error.message
-      };
-    }
-  }
-
-  // Get reminder statistics
-  async getReminderStats() {
-    try {
-      const stats = await pool.query(`
-        SELECT 
-          email_type,
-          COUNT(*) as count,
-          COUNT(CASE WHEN email_status = 'sent' THEN 1 END) as successful,
-          COUNT(CASE WHEN email_status = 'failed' THEN 1 END) as failed
-        FROM invitation_logs 
-        WHERE email_type LIKE '%reminder%'
-        AND sent_at >= NOW() - INTERVAL '30 days'
-        GROUP BY email_type
-        ORDER BY email_type
-      `);
-
-      const pendingInvitations = await pool.query(`
-        SELECT 
-          COUNT(*) as total,
-          COUNT(CASE WHEN invitation_expires_at < NOW() + INTERVAL '24 hours' THEN 1 END) as expiring_soon,
-          COUNT(CASE WHEN invitation_expires_at < NOW() THEN 1 END) as expired
-        FROM users 
-        WHERE status = 'invited'
-      `);
-
-      return {
-        success: true,
-        reminderStats: stats.rows,
-        pendingStats: pendingInvitations.rows[0]
-      };
-
-    } catch (error) {
-      console.error('Error getting reminder stats:', error);
-      return {
-        success: false,
-        error: error.message
-      };
     }
   }
 
@@ -242,13 +161,11 @@ class ReminderService {
     
     setInterval(async () => {
       await this.sendPendingReminders();
-      await this.cleanupExpiredInvitations();
     }, checkInterval);
 
     // Run initial check after 1 minute
     setTimeout(async () => {
       await this.sendPendingReminders();
-      await this.cleanupExpiredInvitations();
     }, 60000);
 
     console.log('✅ Reminder scheduler started (checks every 6 hours)');

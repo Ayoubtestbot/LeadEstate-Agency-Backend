@@ -2,48 +2,46 @@ const express = require('express');
 const router = express.Router();
 const auditService = require('../services/auditService');
 
-// GET /api/audit/logs - Get audit logs with filtering
+// Simple audit routes for single-tenant mode
+// These are simplified versions that work with your existing system
+
+// GET /api/audit/logs - Get audit logs (placeholder)
 router.get('/logs', async (req, res) => {
   try {
     const {
       userId,
-      agencyId,
       action,
       resourceType,
       startDate,
       endDate,
-      severity,
       limit = 100,
       offset = 0
     } = req.query;
 
-    const filters = {
+    // For single-tenant mode, return empty logs
+    const result = await auditService.getAuditLogs({
       userId,
-      agencyId,
       action,
       resourceType,
       startDate: startDate ? new Date(startDate) : null,
       endDate: endDate ? new Date(endDate) : null,
-      severity,
       limit: parseInt(limit),
       offset: parseInt(offset)
-    };
-
-    const result = await auditService.getAuditLogs(filters);
-
-    if (!result.success) {
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to fetch audit logs',
-        error: result.error
-      });
-    }
+    });
 
     res.json({
       success: true,
       data: result.data,
-      count: result.count,
-      filters: filters
+      count: result.count || 0,
+      filters: {
+        userId,
+        action,
+        resourceType,
+        startDate,
+        endDate,
+        limit: parseInt(limit),
+        offset: parseInt(offset)
+      }
     });
 
   } catch (error) {
@@ -56,20 +54,12 @@ router.get('/logs', async (req, res) => {
   }
 });
 
-// GET /api/audit/stats - Get audit statistics
+// GET /api/audit/stats - Get audit statistics (placeholder)
 router.get('/stats', async (req, res) => {
   try {
-    const { agencyId, days = 30 } = req.query;
+    const { days = 30 } = req.query;
 
-    const result = await auditService.getAuditStats(agencyId, parseInt(days));
-
-    if (!result.success) {
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to fetch audit statistics',
-        error: result.error
-      });
-    }
+    const result = await auditService.getAuditStats();
 
     res.json({
       success: true,
@@ -87,36 +77,22 @@ router.get('/stats', async (req, res) => {
   }
 });
 
-// GET /api/audit/user/:userId - Get audit logs for specific user
+// GET /api/audit/user/:userId - Get audit logs for specific user (placeholder)
 router.get('/user/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
     const { limit = 50, offset = 0, days = 30 } = req.query;
 
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - parseInt(days));
-
-    const filters = {
+    const result = await auditService.getAuditLogs({
       userId,
-      startDate,
       limit: parseInt(limit),
       offset: parseInt(offset)
-    };
-
-    const result = await auditService.getAuditLogs(filters);
-
-    if (!result.success) {
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to fetch user audit logs',
-        error: result.error
-      });
-    }
+    });
 
     res.json({
       success: true,
       data: result.data,
-      count: result.count,
+      count: result.count || 0,
       userId,
       period: `${days} days`
     });
@@ -131,51 +107,7 @@ router.get('/user/:userId', async (req, res) => {
   }
 });
 
-// GET /api/audit/agency/:agencyId - Get audit logs for specific agency
-router.get('/agency/:agencyId', async (req, res) => {
-  try {
-    const { agencyId } = req.params;
-    const { limit = 100, offset = 0, days = 30 } = req.query;
-
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - parseInt(days));
-
-    const filters = {
-      agencyId,
-      startDate,
-      limit: parseInt(limit),
-      offset: parseInt(offset)
-    };
-
-    const result = await auditService.getAuditLogs(filters);
-
-    if (!result.success) {
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to fetch agency audit logs',
-        error: result.error
-      });
-    }
-
-    res.json({
-      success: true,
-      data: result.data,
-      count: result.count,
-      agencyId,
-      period: `${days} days`
-    });
-
-  } catch (error) {
-    console.error('Error fetching agency audit logs:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch agency audit logs',
-      error: error.message
-    });
-  }
-});
-
-// POST /api/audit/export - Export audit logs
+// POST /api/audit/export - Export audit logs (placeholder)
 router.post('/export', async (req, res) => {
   try {
     const {
@@ -208,10 +140,7 @@ router.post('/export', async (req, res) => {
     if (format === 'csv') {
       res.setHeader('Content-Type', 'text/csv');
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-      
-      // Convert array to CSV string
-      const csvString = result.data.map(row => row.join(',')).join('\n');
-      res.send(csvString);
+      res.send(''); // Empty CSV for single-tenant mode
     } else {
       res.setHeader('Content-Type', 'application/json');
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
@@ -225,13 +154,9 @@ router.post('/export', async (req, res) => {
 
     // Log the export action
     await auditService.log({
-      userId: req.user?.id,
       action: 'data_export',
       resourceType: 'audit_logs',
-      details: { format, filters, recordCount: result.data.length },
-      ipAddress: req.ip,
-      userAgent: req.get('User-Agent'),
-      severity: 'info'
+      details: { format, filters, recordCount: result.data.length }
     });
 
   } catch (error) {
@@ -244,65 +169,10 @@ router.post('/export', async (req, res) => {
   }
 });
 
-// POST /api/audit/cleanup - Clean up old audit logs
-router.post('/cleanup', async (req, res) => {
-  try {
-    const { retentionDays = 365 } = req.body;
-
-    // Validate retention period
-    if (retentionDays < 30) {
-      return res.status(400).json({
-        success: false,
-        message: 'Retention period must be at least 30 days'
-      });
-    }
-
-    const result = await auditService.cleanupOldLogs(retentionDays);
-
-    if (!result.success) {
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to cleanup audit logs',
-        error: result.error
-      });
-    }
-
-    // Log the cleanup action
-    await auditService.log({
-      userId: req.user?.id,
-      action: 'system_maintenance',
-      resourceType: 'audit_logs',
-      details: { 
-        action: 'cleanup',
-        retentionDays,
-        deletedCount: result.deletedCount
-      },
-      ipAddress: req.ip,
-      userAgent: req.get('User-Agent'),
-      severity: 'info'
-    });
-
-    res.json({
-      success: true,
-      message: `Cleaned up ${result.deletedCount} old audit logs`,
-      deletedCount: result.deletedCount,
-      retentionDays
-    });
-
-  } catch (error) {
-    console.error('Error cleaning up audit logs:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to cleanup audit logs',
-      error: error.message
-    });
-  }
-});
-
-// GET /api/audit/actions - Get available audit actions
+// GET /api/audit/actions - Get available audit actions (placeholder)
 router.get('/actions', (req, res) => {
   try {
-    const actions = Object.values(auditService.actionTypes);
+    const actions = Object.values(auditService.actionTypes || {});
     
     res.json({
       success: true,
