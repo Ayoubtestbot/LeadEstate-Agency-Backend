@@ -57,9 +57,13 @@ const getModels = () => {
   return initializeModels();
 };
 
+// Alias for backward compatibility
+const setupAssociations = initializeModels;
+
 module.exports = {
   getUserModel,
   getLeadModel,
   initializeModels,
+  setupAssociations,
   getModels
 };
