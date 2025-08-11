@@ -1187,12 +1187,10 @@ router.post('/seed-real-data', async (req, res) => {
     });
   }
 });
-// COMPREHENSIVE DATA POPULATION - Create complete realistic data for all users
+// SIMPLE DATA POPULATION - Create basic data that works with existing schema
 router.post('/populate-complete-data', async (req, res) => {
   try {
-    console.log('🌟 COMPREHENSIVE DATA POPULATION STARTING...');
-
-    // team_members table already exists with correct schema
+    console.log('🌟 SIMPLE DATA POPULATION STARTING...');
 
     // Get all active users
     const usersResult = await pool.query(`
@@ -1215,31 +1213,24 @@ router.post('/populate-complete-data', async (req, res) => {
       const user = users[userIndex];
       console.log(`👤 Creating data for ${user.first_name} ${user.last_name}`);
 
-      // Create 6 leads per user
-      for (let i = 0; i < 6; i++) {
+      // Create 5 leads per user - using minimal schema
+      for (let i = 0; i < 5; i++) {
         const leadNumber = userIndex * 100 + i + 1;
 
         try {
-          const leadId = `lead-${userIndex}-${i}-${Date.now()}`;
           await pool.query(`
             INSERT INTO leads (
-              id, first_name, last_name, email, phone, whatsapp, source, status,
-              budget, notes, agency_id, assigned_to, language
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+              first_name, last_name, email, phone, source, status, budget, notes
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
           `, [
-            leadId,
             `Client ${leadNumber}`,
             'Prospect',
             `client${leadNumber}@email.com`,
             `+1-555-${1000 + leadNumber}`,
-            `+1-555-${1000 + leadNumber}`,
             ['Website', 'Referral', 'Social Media', 'Google Ads'][i % 4],
-            ['new', 'contacted', 'qualified', 'proposal', 'negotiation', 'closed_won'][i % 6],
+            ['new', 'contacted', 'qualified', 'proposal'][i % 4],
             300000 + (userIndex * 10000) + (i * 5000),
-            `Looking for property in ${['Downtown Miami', 'Brickell', 'Coral Gables', 'Coconut Grove', 'South Beach', 'Aventura'][i % 6]}. Budget flexible. Contact via phone or WhatsApp.`,
-            user.agency_id || 'default-agency',
-            user.id,
-            'en'
+            `Looking for property. Budget flexible. Contact via phone.`
           ]);
           totalLeadsCreated++;
         } catch (leadError) {
@@ -1247,25 +1238,22 @@ router.post('/populate-complete-data', async (req, res) => {
         }
       }
 
-      // Create 4 properties per user
-      for (let i = 0; i < 4; i++) {
+      // Create 3 properties per user - using minimal schema
+      for (let i = 0; i < 3; i++) {
         const propNumber = userIndex * 100 + i + 1;
 
         try {
-          const propId = `prop-${userIndex}-${i}-${Date.now()}`;
           await pool.query(`
             INSERT INTO properties (
-              id, title, type, price, location, area, description, status
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+              title, type, price, area, description, status
+            ) VALUES ($1, $2, $3, $4, $5, $6)
           `, [
-            propId,
-            `Property ${propNumber} - ${['House', 'Condo', 'Townhouse', 'Villa'][i % 4]}`,
-            ['House', 'Condo', 'Townhouse', 'Villa'][i % 4],
+            `Property ${propNumber} - ${['House', 'Condo', 'Townhouse'][i % 3]}`,
+            ['House', 'Condo', 'Townhouse'][i % 3],
             400000 + (userIndex * 25000) + (i * 15000),
-            ['Downtown Miami', 'Brickell', 'Coral Gables', 'Coconut Grove'][i % 4],
             1200 + (userIndex * 100) + (i * 200),
-            `Beautiful ${['House', 'Condo', 'Townhouse', 'Villa'][i % 4]} with modern amenities and great location.`,
-            ['available', 'under_contract', 'sold'][i % 3]
+            `Beautiful ${['House', 'Condo', 'Townhouse'][i % 3]} with modern amenities.`,
+            ['available', 'under_contract'][i % 2]
           ]);
           totalPropertiesCreated++;
         } catch (propError) {
@@ -1273,23 +1261,20 @@ router.post('/populate-complete-data', async (req, res) => {
         }
       }
 
-      // Create 3 team members per user
-      for (let i = 0; i < 3; i++) {
-        const teamNumber = userIndex * 100 + i + 1;
+      // Create 2 team members per user - using minimal schema
+      for (let i = 0; i < 2; i++) {
+        const teamNumber = userIndex * 1000 + i + 1;
 
         try {
-          const teamId = `team-${userIndex}-${i}-${Date.now()}`;
           await pool.query(`
             INSERT INTO team_members (
-              id, name, email, phone, role, department, status
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+              name, email, phone, role, status
+            ) VALUES ($1, $2, $3, $4, $5)
           `, [
-            teamId,
-            `Agent ${teamNumber} ${['Smith', 'Johnson', 'Williams'][i % 3]}`,
+            `Agent ${teamNumber} ${['Smith', 'Johnson'][i % 2]}`,
             `agent${teamNumber}@agency.com`,
             `+1-555-${2000 + teamNumber}`,
-            ['agent', 'assistant', 'coordinator'][i % 3],
-            ['Residential Sales', 'Luxury Properties', 'Investment Properties'][i % 3],
+            ['agent', 'assistant'][i % 2],
             'active'
           ]);
           totalTeamMembersCreated++;
@@ -1299,11 +1284,11 @@ router.post('/populate-complete-data', async (req, res) => {
       }
     }
 
-    console.log('🎉 COMPREHENSIVE DATA POPULATION COMPLETED!');
+    console.log('🎉 SIMPLE DATA POPULATION COMPLETED!');
 
     res.json({
       success: true,
-      message: 'Comprehensive data population completed successfully',
+      message: 'Simple data population completed successfully',
       data: {
         usersProcessed: users.length,
         leadsCreated: totalLeadsCreated,
@@ -1319,10 +1304,10 @@ router.post('/populate-complete-data', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Comprehensive data population error:', error);
+    console.error('❌ Simple data population error:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to populate comprehensive data',
+      message: 'Failed to populate simple data',
       error: error.message
     });
   }
