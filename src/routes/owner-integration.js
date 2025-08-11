@@ -1220,8 +1220,8 @@ router.post('/populate-complete-data', async (req, res) => {
         try {
           await pool.query(`
             INSERT INTO leads (
-              first_name, last_name, email, phone, whatsapp, source, status, notes, agency_id, assigned_to, budget, language, city
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+              id, first_name, last_name, email, phone, whatsapp, source, status, notes, agency_id, assigned_to, budget, language, city
+            ) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
           `, [
             `Client ${leadNumber}`,
             'Prospect',
@@ -1250,9 +1250,10 @@ router.post('/populate-complete-data', async (req, res) => {
         try {
           await pool.query(`
             INSERT INTO properties (
-              title, type, price, address, city, surface, description, status, agency_id, listed_by
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+              id, title, type, price, address, city, surface, description, status, agency_id, listed_by
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
           `, [
+            `prop-${Date.now()}-${userIndex}-${i}`,
             `Property ${propNumber} - ${['House', 'Condo', 'Townhouse'][i % 3]}`,
             ['House', 'Condo', 'Townhouse'][i % 3],
             400000 + (userIndex * 25000) + (i * 15000),
@@ -1277,9 +1278,10 @@ router.post('/populate-complete-data', async (req, res) => {
         try {
           await pool.query(`
             INSERT INTO team_members (
-              name, email, phone, role, department, status
-            ) VALUES ($1, $2, $3, $4, $5, $6)
+              id, name, email, phone, role, department, status
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7)
           `, [
+            `team-${Date.now()}-${userIndex}-${i}`,
             `Agent ${teamNumber} ${['Smith', 'Johnson'][i % 2]}`,
             `agent${teamNumber}@agency.com`,
             `+1-555-${2000 + (teamNumber % 9999)}`,
