@@ -1192,24 +1192,7 @@ router.post('/populate-complete-data', async (req, res) => {
   try {
     console.log('🌟 COMPREHENSIVE DATA POPULATION STARTING...');
 
-    // Ensure team_members table exists
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS team_members (
-        id VARCHAR(255) PRIMARY KEY,
-        first_name VARCHAR(100) NOT NULL,
-        last_name VARCHAR(100) NOT NULL,
-        email VARCHAR(255) NOT NULL,
-        phone VARCHAR(20),
-        role VARCHAR(50) DEFAULT 'agent',
-        specialization VARCHAR(255),
-        experience_years INTEGER DEFAULT 1,
-        agency_id VARCHAR(255),
-        manager_id VARCHAR(255),
-        status VARCHAR(20) DEFAULT 'active',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
+    // team_members table already exists with correct schema
 
     // Get all active users
     const usersResult = await pool.query(`
@@ -1241,8 +1224,8 @@ router.post('/populate-complete-data', async (req, res) => {
           await pool.query(`
             INSERT INTO leads (
               id, first_name, last_name, email, phone, whatsapp, source, status,
-              budget, location, notes, agency_id, assigned_to, language
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+              budget, notes, agency_id, assigned_to, language
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
           `, [
             leadId,
             `Client ${leadNumber}`,
@@ -1253,8 +1236,7 @@ router.post('/populate-complete-data', async (req, res) => {
             ['Website', 'Referral', 'Social Media', 'Google Ads'][i % 4],
             ['new', 'contacted', 'qualified', 'proposal', 'negotiation', 'closed_won'][i % 6],
             300000 + (userIndex * 10000) + (i * 5000),
-            ['Downtown Miami', 'Brickell', 'Coral Gables', 'Coconut Grove', 'South Beach', 'Aventura'][i % 6],
-            `Looking for property. Budget flexible. Contact via phone or WhatsApp.`,
+            `Looking for property in ${['Downtown Miami', 'Brickell', 'Coral Gables', 'Coconut Grove', 'South Beach', 'Aventura'][i % 6]}. Budget flexible. Contact via phone or WhatsApp.`,
             user.agency_id,
             user.id,
             'en'
@@ -1306,20 +1288,15 @@ router.post('/populate-complete-data', async (req, res) => {
           const teamId = `team_${userIndex}_${i}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
           await pool.query(`
             INSERT INTO team_members (
-              id, first_name, last_name, email, phone, role, specialization,
-              experience_years, agency_id, manager_id, status
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+              id, name, email, phone, role, department, status
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7)
           `, [
             teamId,
-            `Agent ${teamNumber}`,
-            ['Smith', 'Johnson', 'Williams'][i % 3],
+            `Agent ${teamNumber} ${['Smith', 'Johnson', 'Williams'][i % 3]}`,
             `agent${teamNumber}@agency.com`,
             `+1-555-${2000 + teamNumber}`,
             ['agent', 'assistant', 'coordinator'][i % 3],
             ['Residential Sales', 'Luxury Properties', 'Investment Properties'][i % 3],
-            2 + (i % 4),
-            user.agency_id,
-            user.id,
             'active'
           ]);
           totalTeamMembersCreated++;
