@@ -1220,14 +1220,12 @@ router.post('/populate-complete-data', async (req, res) => {
         const leadNumber = userIndex * 100 + i + 1;
 
         try {
-          const leadId = `lead_${userIndex}_${i}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
           await pool.query(`
             INSERT INTO leads (
-              id, first_name, last_name, email, phone, whatsapp, source, status,
+              first_name, last_name, email, phone, whatsapp, source, status,
               budget, notes, agency_id, assigned_to, language
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
           `, [
-            leadId,
             `Client ${leadNumber}`,
             'Prospect',
             `client${leadNumber}@email.com`,
@@ -1252,27 +1250,19 @@ router.post('/populate-complete-data', async (req, res) => {
         const propNumber = userIndex * 100 + i + 1;
 
         try {
-          const propId = `prop_${userIndex}_${i}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
           await pool.query(`
             INSERT INTO properties (
-              id, title, type, price, location, bedrooms, bathrooms, area,
-              address, city, status, description, agency_id, listed_by
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+              title, type, price, bedrooms, bathrooms, area, description, status
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
           `, [
-            propId,
             `Property ${propNumber} - ${['House', 'Condo', 'Townhouse', 'Villa'][i % 4]}`,
             ['House', 'Condo', 'Townhouse', 'Villa'][i % 4],
             400000 + (userIndex * 25000) + (i * 15000),
-            ['Downtown Miami', 'Brickell', 'Coral Gables', 'Coconut Grove'][i % 4],
             2 + (i % 3),
             1 + (i % 3),
             1200 + (userIndex * 100) + (i * 200),
-            `${1234 + propNumber} Main St, Miami, FL`,
-            'Miami',
-            ['available', 'under_contract', 'sold'][i % 3],
-            `Beautiful ${['House', 'Condo', 'Townhouse', 'Villa'][i % 4]} with modern amenities and great location.`,
-            user.agency_id,
-            user.id
+            `Beautiful ${['House', 'Condo', 'Townhouse', 'Villa'][i % 4]} with modern amenities in ${['Downtown Miami', 'Brickell', 'Coral Gables', 'Coconut Grove'][i % 4]}.`,
+            ['available', 'under_contract', 'sold'][i % 3]
           ]);
           totalPropertiesCreated++;
         } catch (propError) {
@@ -1285,13 +1275,11 @@ router.post('/populate-complete-data', async (req, res) => {
         const teamNumber = userIndex * 100 + i + 1;
 
         try {
-          const teamId = `team_${userIndex}_${i}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
           await pool.query(`
             INSERT INTO team_members (
-              id, name, email, phone, role, department, status
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+              name, email, phone, role, department, status
+            ) VALUES ($1, $2, $3, $4, $5, $6)
           `, [
-            teamId,
             `Agent ${teamNumber} ${['Smith', 'Johnson', 'Williams'][i % 3]}`,
             `agent${teamNumber}@agency.com`,
             `+1-555-${2000 + teamNumber}`,
