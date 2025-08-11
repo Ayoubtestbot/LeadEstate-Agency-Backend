@@ -1187,7 +1187,7 @@ router.post('/seed-real-data', async (req, res) => {
     });
   }
 });
-// ULTRA MINIMAL DATA POPULATION - Only essential columns
+// SCHEMA-ACCURATE DATA POPULATION - Using exact discovered schemas
 router.post('/populate-complete-data', async (req, res) => {
   try {
     console.log('🌟 ULTRA MINIMAL DATA POPULATION STARTING...');
@@ -1220,18 +1220,22 @@ router.post('/populate-complete-data', async (req, res) => {
         try {
           await pool.query(`
             INSERT INTO leads (
-              id, first_name, last_name, email, phone, source, status, notes, agency_id, assigned_to, created_at, updated_at
-            ) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+              first_name, last_name, email, phone, whatsapp, source, status, notes, agency_id, assigned_to, budget, language, city
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
           `, [
             `Client ${leadNumber}`,
             'Prospect',
             `client${leadNumber}@email.com`,
             `+1-555-${1000 + leadNumber}`,
+            `+1-555-${1000 + leadNumber}`,
             ['Website', 'Referral', 'Social Media', 'Google Ads'][i % 4],
             ['new', 'contacted', 'qualified', 'proposal'][i % 4],
             `Looking for property. Contact via phone.`,
             user.agency_id || 'default-agency-id',
-            user.id
+            user.id,
+            300000 + (userIndex * 10000) + (i * 5000),
+            'en',
+            ['Miami', 'Fort Lauderdale', 'Orlando', 'Tampa'][i % 4]
           ]);
           totalLeadsCreated++;
         } catch (leadError) {
@@ -1246,12 +1250,15 @@ router.post('/populate-complete-data', async (req, res) => {
         try {
           await pool.query(`
             INSERT INTO properties (
-              id, title, type, price, description, status, agency_id, listed_by, created_at, updated_at
-            ) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+              title, type, price, address, city, surface, description, status, agency_id, listed_by
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
           `, [
             `Property ${propNumber} - ${['House', 'Condo', 'Townhouse'][i % 3]}`,
             ['House', 'Condo', 'Townhouse'][i % 3],
             400000 + (userIndex * 25000) + (i * 15000),
+            `${1234 + propNumber} Main St`,
+            ['Miami', 'Fort Lauderdale', 'Orlando', 'Tampa'][i % 4],
+            1200 + (userIndex * 100) + (i * 200),
             `Beautiful ${['House', 'Condo', 'Townhouse'][i % 3]} with modern amenities.`,
             ['available', 'under_contract'][i % 2],
             user.agency_id || 'default-agency-id',
@@ -1270,13 +1277,14 @@ router.post('/populate-complete-data', async (req, res) => {
         try {
           await pool.query(`
             INSERT INTO team_members (
-              id, name, email, phone, role, status, created_at, updated_at
-            ) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+              name, email, phone, role, department, status
+            ) VALUES ($1, $2, $3, $4, $5, $6)
           `, [
             `Agent ${teamNumber} ${['Smith', 'Johnson'][i % 2]}`,
             `agent${teamNumber}@agency.com`,
             `+1-555-${2000 + (teamNumber % 9999)}`,
             ['agent', 'assistant'][i % 2],
+            ['Sales', 'Support'][i % 2],
             'active'
           ]);
           totalTeamMembersCreated++;
