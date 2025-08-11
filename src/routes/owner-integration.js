@@ -1220,8 +1220,8 @@ router.post('/populate-complete-data', async (req, res) => {
         try {
           await pool.query(`
             INSERT INTO leads (
-              id, first_name, last_name, email, phone, source, status, notes
-            ) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7)
+              id, first_name, last_name, email, phone, source, status, notes, agency_id, assigned_to
+            ) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9)
           `, [
             `Client ${leadNumber}`,
             'Prospect',
@@ -1229,7 +1229,9 @@ router.post('/populate-complete-data', async (req, res) => {
             `+1-555-${1000 + leadNumber}`,
             ['Website', 'Referral', 'Social Media', 'Google Ads'][i % 4],
             ['new', 'contacted', 'qualified', 'proposal'][i % 4],
-            `Looking for property. Contact via phone.`
+            `Looking for property. Contact via phone.`,
+            user.agency_id || 'default-agency-id',
+            user.id
           ]);
           totalLeadsCreated++;
         } catch (leadError) {
@@ -1244,14 +1246,16 @@ router.post('/populate-complete-data', async (req, res) => {
         try {
           await pool.query(`
             INSERT INTO properties (
-              id, title, type, price, description, status
-            ) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5)
+              id, title, type, price, description, status, agency_id, listed_by
+            ) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7)
           `, [
             `Property ${propNumber} - ${['House', 'Condo', 'Townhouse'][i % 3]}`,
             ['House', 'Condo', 'Townhouse'][i % 3],
             400000 + (userIndex * 25000) + (i * 15000),
             `Beautiful ${['House', 'Condo', 'Townhouse'][i % 3]} with modern amenities.`,
-            ['available', 'under_contract'][i % 2]
+            ['available', 'under_contract'][i % 2],
+            user.agency_id || 'default-agency-id',
+            user.id
           ]);
           totalPropertiesCreated++;
         } catch (propError) {
@@ -1266,14 +1270,16 @@ router.post('/populate-complete-data', async (req, res) => {
         try {
           await pool.query(`
             INSERT INTO team_members (
-              id, name, email, phone, role, status
-            ) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5)
+              id, name, email, phone, role, status, agency_id, manager_id
+            ) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7)
           `, [
             `Agent ${teamNumber} ${['Smith', 'Johnson'][i % 2]}`,
             `agent${teamNumber}@agency.com`,
             `+1-555-${2000 + (teamNumber % 9999)}`,
             ['agent', 'assistant'][i % 2],
-            'active'
+            'active',
+            user.agency_id || 'default-agency-id',
+            user.id
           ]);
           totalTeamMembersCreated++;
         } catch (teamError) {
