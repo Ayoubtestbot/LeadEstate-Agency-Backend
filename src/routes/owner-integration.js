@@ -1457,4 +1457,29 @@ router.get('/check-data/:userId', async (req, res) => {
   }
 });
 
+// GET ALL USERS - Find user IDs
+router.get('/get-all-users', async (req, res) => {
+  try {
+    const usersResult = await pool.query(`
+      SELECT id, first_name, last_name, email, role, agency_id, status, created_at
+      FROM users
+      ORDER BY created_at
+    `);
+
+    res.json({
+      success: true,
+      users: usersResult.rows,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('❌ Get users error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get users',
+      error: error.message
+    });
+  }
+});
+
 module.exports = router;
