@@ -3,10 +3,10 @@ const router = express.Router();
 const { HTTP_STATUS } = require('../utils/constants');
 const { formatResponse } = require('../utils/helpers');
 const { pool } = require('../config/database');
-const { authenticateToken } = require('../middleware/auth');
+const { authMiddleware } = require('../middleware/auth');
 
 // GET /api/team - Get team members
-router.get('/', authenticateToken, async (req, res) => {
+router.get('/', authMiddleware, async (req, res) => {
   try {
     console.log('👥 Team endpoint called for user:', req.user?.userId, 'agency:', req.user?.agencyId);
 

@@ -3,10 +3,10 @@ const router = express.Router();
 const { HTTP_STATUS } = require('../utils/constants');
 const { formatResponse } = require('../utils/helpers');
 const { pool } = require('../config/database');
-const { authenticateToken } = require('../middleware/auth');
+const { authMiddleware } = require('../middleware/auth');
 
 // GET /api/properties - Get all properties
-router.get('/', authenticateToken, async (req, res) => {
+router.get('/', authMiddleware, async (req, res) => {
   try {
     console.log('🏠 Properties endpoint called for user:', req.user?.userId, 'agency:', req.user?.agencyId);
 
