@@ -4,10 +4,8 @@ const { HTTP_STATUS } = require('../utils/constants');
 const { formatResponse } = require('../utils/helpers');
 const { checkSubscriptionStatus, checkUsageLimit, addTrialInfo } = require('../middleware/subscription');
 const { pool } = require('../config/database');
-const { authMiddleware } = require('../middleware/auth');
-
 // GET /api/leads - Get all leads (with subscription check and trial info)
-router.get('/', authMiddleware, checkSubscriptionStatus, addTrialInfo, async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     console.log('📋 Leads endpoint called for user:', req.user?.userId, 'agency:', req.user?.agencyId);
 
