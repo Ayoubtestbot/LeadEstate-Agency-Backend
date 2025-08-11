@@ -1315,8 +1315,60 @@ router.post('/populate-complete-data', async (req, res) => {
   }
 });
 
+// DISCOVER ACTUAL TABLE SCHEMAS - Get exact column information
+router.get('/discover-schemas', async (req, res) => {
+  try {
+    console.log('🔍 DISCOVERING ACTUAL TABLE SCHEMAS...');
 
+    const schemas = {};
 
+    // Get leads table schema
+    const leadsSchema = await pool.query(`
+      SELECT column_name, data_type, is_nullable, column_default
+      FROM information_schema.columns
+      WHERE table_name = 'leads'
+      ORDER BY ordinal_position
+    `);
+    schemas.leads = leadsSchema.rows;
 
+    // Get properties table schema
+    const propertiesSchema = await pool.query(`
+      SELECT column_name, data_type, is_nullable, column_default
+      FROM information_schema.columns
+      WHERE table_name = 'properties'
+      ORDER BY ordinal_position
+    `);
+    schemas.properties = propertiesSchema.rows;
+
+    // Get team_members table schema
+    const teamSchema = await pool.query(`
+      SELECT column_name, data_type, is_nullable, column_default
+      FROM information_schema.columns
+      WHERE table_name = 'team_members'
+      ORDER BY ordinal_position
+    `);
+    schemas.team_members = teamSchema.rows;
+
+    console.log('📋 DISCOVERED SCHEMAS:');
+    console.log('LEADS:', schemas.leads.map(col => `${col.column_name} (${col.data_type}, nullable: ${col.is_nullable})`));
+    console.log('PROPERTIES:', schemas.properties.map(col => `${col.column_name} (${col.data_type}, nullable: ${col.is_nullable})`));
+    console.log('TEAM_MEMBERS:', schemas.team_members.map(col => `${col.column_name} (${col.data_type}, nullable: ${col.is_nullable})`));
+
+    res.json({
+      success: true,
+      message: 'Database schemas discovered successfully',
+      schemas: schemas,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('❌ Schema discovery error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to discover schemas',
+      error: error.message
+    });
+  }
+});
 
 module.exports = router;
