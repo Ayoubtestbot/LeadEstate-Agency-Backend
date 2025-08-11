@@ -1187,6 +1187,176 @@ router.post('/seed-real-data', async (req, res) => {
     });
   }
 });
+// COMPREHENSIVE DATA POPULATION - Create complete realistic data for all users
+router.post('/populate-complete-data', async (req, res) => {
+  try {
+    console.log('🌟 COMPREHENSIVE DATA POPULATION STARTING...');
+
+    // Ensure team_members table exists
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS team_members (
+        id VARCHAR(255) PRIMARY KEY,
+        first_name VARCHAR(100) NOT NULL,
+        last_name VARCHAR(100) NOT NULL,
+        email VARCHAR(255) NOT NULL,
+        phone VARCHAR(20),
+        role VARCHAR(50) DEFAULT 'agent',
+        specialization VARCHAR(255),
+        experience_years INTEGER DEFAULT 1,
+        agency_id VARCHAR(255),
+        manager_id VARCHAR(255),
+        status VARCHAR(20) DEFAULT 'active',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Get all active users
+    const usersResult = await pool.query(`
+      SELECT u.*, a.name as agency_name
+      FROM users u
+      LEFT JOIN agencies a ON u.agency_id = a.id
+      WHERE u.status = 'active' AND u.role != 'owner'
+      ORDER BY u.created_at
+    `);
+
+    const users = usersResult.rows;
+    console.log(`📊 Found ${users.length} users to populate data for`);
+
+    let totalLeadsCreated = 0;
+    let totalPropertiesCreated = 0;
+    let totalTeamMembersCreated = 0;
+
+    // Create data for each user
+    for (let userIndex = 0; userIndex < users.length; userIndex++) {
+      const user = users[userIndex];
+      console.log(`👤 Creating data for ${user.first_name} ${user.last_name}`);
+
+      // Create 6 leads per user
+      for (let i = 0; i < 6; i++) {
+        const leadNumber = userIndex * 100 + i + 1;
+
+        try {
+          const leadId = `lead_${userIndex}_${i}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          await pool.query(`
+            INSERT INTO leads (
+              id, first_name, last_name, email, phone, whatsapp, source, status,
+              budget, location, notes, agency_id, assigned_to, language
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+          `, [
+            leadId,
+            `Client ${leadNumber}`,
+            'Prospect',
+            `client${leadNumber}@email.com`,
+            `+1-555-${1000 + leadNumber}`,
+            `+1-555-${1000 + leadNumber}`,
+            ['Website', 'Referral', 'Social Media', 'Google Ads'][i % 4],
+            ['new', 'contacted', 'qualified', 'proposal', 'negotiation', 'closed_won'][i % 6],
+            300000 + (userIndex * 10000) + (i * 5000),
+            ['Downtown Miami', 'Brickell', 'Coral Gables', 'Coconut Grove', 'South Beach', 'Aventura'][i % 6],
+            `Looking for property. Budget flexible. Contact via phone or WhatsApp.`,
+            user.agency_id,
+            user.id,
+            'en'
+          ]);
+          totalLeadsCreated++;
+        } catch (leadError) {
+          console.log(`Lead creation failed:`, leadError.message);
+        }
+      }
+
+      // Create 4 properties per user
+      for (let i = 0; i < 4; i++) {
+        const propNumber = userIndex * 100 + i + 1;
+
+        try {
+          const propId = `prop_${userIndex}_${i}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          await pool.query(`
+            INSERT INTO properties (
+              id, title, type, price, location, bedrooms, bathrooms, area,
+              address, city, status, description, agency_id, listed_by
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+          `, [
+            propId,
+            `Property ${propNumber} - ${['House', 'Condo', 'Townhouse', 'Villa'][i % 4]}`,
+            ['House', 'Condo', 'Townhouse', 'Villa'][i % 4],
+            400000 + (userIndex * 25000) + (i * 15000),
+            ['Downtown Miami', 'Brickell', 'Coral Gables', 'Coconut Grove'][i % 4],
+            2 + (i % 3),
+            1 + (i % 3),
+            1200 + (userIndex * 100) + (i * 200),
+            `${1234 + propNumber} Main St, Miami, FL`,
+            'Miami',
+            ['available', 'under_contract', 'sold'][i % 3],
+            `Beautiful ${['House', 'Condo', 'Townhouse', 'Villa'][i % 4]} with modern amenities and great location.`,
+            user.agency_id,
+            user.id
+          ]);
+          totalPropertiesCreated++;
+        } catch (propError) {
+          console.log(`Property creation failed:`, propError.message);
+        }
+      }
+
+      // Create 3 team members per user
+      for (let i = 0; i < 3; i++) {
+        const teamNumber = userIndex * 100 + i + 1;
+
+        try {
+          const teamId = `team_${userIndex}_${i}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          await pool.query(`
+            INSERT INTO team_members (
+              id, first_name, last_name, email, phone, role, specialization,
+              experience_years, agency_id, manager_id, status
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          `, [
+            teamId,
+            `Agent ${teamNumber}`,
+            ['Smith', 'Johnson', 'Williams'][i % 3],
+            `agent${teamNumber}@agency.com`,
+            `+1-555-${2000 + teamNumber}`,
+            ['agent', 'assistant', 'coordinator'][i % 3],
+            ['Residential Sales', 'Luxury Properties', 'Investment Properties'][i % 3],
+            2 + (i % 4),
+            user.agency_id,
+            user.id,
+            'active'
+          ]);
+          totalTeamMembersCreated++;
+        } catch (teamError) {
+          console.log(`Team member creation failed:`, teamError.message);
+        }
+      }
+    }
+
+    console.log('🎉 COMPREHENSIVE DATA POPULATION COMPLETED!');
+
+    res.json({
+      success: true,
+      message: 'Comprehensive data population completed successfully',
+      data: {
+        usersProcessed: users.length,
+        leadsCreated: totalLeadsCreated,
+        propertiesCreated: totalPropertiesCreated,
+        teamMembersCreated: totalTeamMembersCreated,
+        summary: {
+          avgLeadsPerUser: Math.round(totalLeadsCreated / users.length),
+          avgPropertiesPerUser: Math.round(totalPropertiesCreated / users.length),
+          avgTeamMembersPerUser: Math.round(totalTeamMembersCreated / users.length)
+        }
+      },
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('❌ Comprehensive data population error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to populate comprehensive data',
+      error: error.message
+    });
+  }
+});
 
 
 
