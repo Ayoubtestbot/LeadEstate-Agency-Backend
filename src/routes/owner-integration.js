@@ -1220,8 +1220,8 @@ router.post('/populate-complete-data', async (req, res) => {
         try {
           await pool.query(`
             INSERT INTO leads (
-              id, first_name, last_name, email, phone, whatsapp, source, status, notes, agency_id, assigned_to, budget, language, city
-            ) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+              id, first_name, last_name, email, phone, whatsapp, source, status, notes, agency_id, assigned_to, budget, language, city, created_at, updated_at
+            ) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
           `, [
             `Client ${leadNumber}`,
             'Prospect',
