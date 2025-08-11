@@ -1187,10 +1187,10 @@ router.post('/seed-real-data', async (req, res) => {
     });
   }
 });
-// SIMPLE DATA POPULATION - Create basic data that works with existing schema
+// ULTRA MINIMAL DATA POPULATION - Only essential columns
 router.post('/populate-complete-data', async (req, res) => {
   try {
-    console.log('🌟 SIMPLE DATA POPULATION STARTING...');
+    console.log('🌟 ULTRA MINIMAL DATA POPULATION STARTING...');
 
     // Get all active users
     const usersResult = await pool.query(`
@@ -1213,24 +1213,25 @@ router.post('/populate-complete-data', async (req, res) => {
       const user = users[userIndex];
       console.log(`👤 Creating data for ${user.first_name} ${user.last_name}`);
 
-      // Create 5 leads per user - using minimal schema
+      // Create 5 leads per user - only essential columns
       for (let i = 0; i < 5; i++) {
         const leadNumber = userIndex * 100 + i + 1;
+        const leadId = `${Date.now()}-${userIndex}-${i}-${Math.random().toString(36).substr(2, 9)}`;
 
         try {
           await pool.query(`
             INSERT INTO leads (
-              first_name, last_name, email, phone, source, status, budget, notes
+              id, first_name, last_name, email, phone, source, status, notes
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
           `, [
+            leadId,
             `Client ${leadNumber}`,
             'Prospect',
             `client${leadNumber}@email.com`,
             `+1-555-${1000 + leadNumber}`,
             ['Website', 'Referral', 'Social Media', 'Google Ads'][i % 4],
             ['new', 'contacted', 'qualified', 'proposal'][i % 4],
-            300000 + (userIndex * 10000) + (i * 5000),
-            `Looking for property. Budget flexible. Contact via phone.`
+            `Looking for property. Contact via phone.`
           ]);
           totalLeadsCreated++;
         } catch (leadError) {
@@ -1238,20 +1239,21 @@ router.post('/populate-complete-data', async (req, res) => {
         }
       }
 
-      // Create 3 properties per user - using minimal schema
+      // Create 3 properties per user - only essential columns
       for (let i = 0; i < 3; i++) {
         const propNumber = userIndex * 100 + i + 1;
+        const propId = `${Date.now()}-${userIndex}-${i}-${Math.random().toString(36).substr(2, 9)}`;
 
         try {
           await pool.query(`
             INSERT INTO properties (
-              title, type, price, area, description, status
+              id, title, type, price, description, status
             ) VALUES ($1, $2, $3, $4, $5, $6)
           `, [
+            propId,
             `Property ${propNumber} - ${['House', 'Condo', 'Townhouse'][i % 3]}`,
             ['House', 'Condo', 'Townhouse'][i % 3],
             400000 + (userIndex * 25000) + (i * 15000),
-            1200 + (userIndex * 100) + (i * 200),
             `Beautiful ${['House', 'Condo', 'Townhouse'][i % 3]} with modern amenities.`,
             ['available', 'under_contract'][i % 2]
           ]);
@@ -1261,16 +1263,18 @@ router.post('/populate-complete-data', async (req, res) => {
         }
       }
 
-      // Create 2 team members per user - using minimal schema
+      // Create 2 team members per user - only essential columns
       for (let i = 0; i < 2; i++) {
         const teamNumber = userIndex * 1000 + i + 1;
+        const teamId = `${Date.now()}-${userIndex}-${i}-${Math.random().toString(36).substr(2, 9)}`;
 
         try {
           await pool.query(`
             INSERT INTO team_members (
-              name, email, phone, role, status
-            ) VALUES ($1, $2, $3, $4, $5)
+              id, name, email, phone, role, status
+            ) VALUES ($1, $2, $3, $4, $5, $6)
           `, [
+            teamId,
             `Agent ${teamNumber} ${['Smith', 'Johnson'][i % 2]}`,
             `agent${teamNumber}@agency.com`,
             `+1-555-${2000 + teamNumber}`,
@@ -1284,11 +1288,11 @@ router.post('/populate-complete-data', async (req, res) => {
       }
     }
 
-    console.log('🎉 SIMPLE DATA POPULATION COMPLETED!');
+    console.log('🎉 ULTRA MINIMAL DATA POPULATION COMPLETED!');
 
     res.json({
       success: true,
-      message: 'Simple data population completed successfully',
+      message: 'Ultra minimal data population completed successfully',
       data: {
         usersProcessed: users.length,
         leadsCreated: totalLeadsCreated,
@@ -1304,10 +1308,10 @@ router.post('/populate-complete-data', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Simple data population error:', error);
+    console.error('❌ Ultra minimal data population error:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to populate simple data',
+      message: 'Failed to populate ultra minimal data',
       error: error.message
     });
   }
