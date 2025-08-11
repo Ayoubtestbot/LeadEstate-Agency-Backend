@@ -1220,8 +1220,8 @@ router.post('/populate-complete-data', async (req, res) => {
         try {
           await pool.query(`
             INSERT INTO leads (
-              first_name, last_name, email, phone, source, status, notes
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+              id, first_name, last_name, email, phone, source, status, notes
+            ) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7)
           `, [
             `Client ${leadNumber}`,
             'Prospect',
@@ -1244,8 +1244,8 @@ router.post('/populate-complete-data', async (req, res) => {
         try {
           await pool.query(`
             INSERT INTO properties (
-              title, type, price, description, status
-            ) VALUES ($1, $2, $3, $4, $5)
+              id, title, type, price, description, status
+            ) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5)
           `, [
             `Property ${propNumber} - ${['House', 'Condo', 'Townhouse'][i % 3]}`,
             ['House', 'Condo', 'Townhouse'][i % 3],
@@ -1266,8 +1266,8 @@ router.post('/populate-complete-data', async (req, res) => {
         try {
           await pool.query(`
             INSERT INTO team_members (
-              name, email, phone, role, status
-            ) VALUES ($1, $2, $3, $4, $5)
+              id, name, email, phone, role, status
+            ) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5)
           `, [
             `Agent ${teamNumber} ${['Smith', 'Johnson'][i % 2]}`,
             `agent${teamNumber}@agency.com`,
