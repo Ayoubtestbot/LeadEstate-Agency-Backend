@@ -1032,6 +1032,184 @@ router.get('/agencies-simple', verifyOwnerRequest, async (req, res) => {
     });
   }
 });
+// Seed real data for all users (NEVER DELETE - ONLY ADD)
+router.post('/seed-real-data', async (req, res) => {
+  try {
+    console.log('🌱 Seeding real data for all users...');
+
+    // First ensure leads and properties tables exist
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS leads (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        first_name VARCHAR(100) NOT NULL,
+        last_name VARCHAR(100) NOT NULL,
+        email VARCHAR(255) NOT NULL,
+        phone VARCHAR(20),
+        source VARCHAR(100),
+        status VARCHAR(50) DEFAULT 'new',
+        budget_min DECIMAL(12,2),
+        budget_max DECIMAL(12,2),
+        property_type VARCHAR(50),
+        bedrooms INTEGER,
+        bathrooms INTEGER,
+        location VARCHAR(255),
+        notes TEXT,
+        agency_id UUID,
+        assigned_to UUID,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS properties (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        title VARCHAR(255) NOT NULL,
+        type VARCHAR(50) NOT NULL,
+        price DECIMAL(12,2) NOT NULL,
+        bedrooms INTEGER,
+        bathrooms INTEGER,
+        square_feet INTEGER,
+        lot_size DECIMAL(8,4),
+        address VARCHAR(255),
+        city VARCHAR(100),
+        state VARCHAR(50),
+        zip_code VARCHAR(10),
+        status VARCHAR(50) DEFAULT 'available',
+        description TEXT,
+        agency_id UUID,
+        listed_by UUID,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Get all users
+    const usersResult = await pool.query(`
+      SELECT u.*, a.name as agency_name
+      FROM users u
+      LEFT JOIN agencies a ON u.agency_id = a.id
+      WHERE u.status = 'active' AND u.role != 'owner'
+      ORDER BY u.created_at
+    `);
+
+    const users = usersResult.rows;
+    console.log(`Found ${users.length} users to seed data for`);
+
+    let totalLeadsCreated = 0;
+    let totalPropertiesCreated = 0;
+
+    // Real leads data
+    const realLeadsData = [
+      { first_name: 'Michael', last_name: 'Johnson', email: 'michael.johnson@email.com', phone: '+1-555-0101', source: 'Website', status: 'new', budget_min: 250000, budget_max: 350000, property_type: 'House', bedrooms: 3, bathrooms: 2, location: 'Downtown Miami', notes: 'Looking for family home near schools' },
+      { first_name: 'Sarah', last_name: 'Williams', email: 'sarah.williams@email.com', phone: '+1-555-0102', source: 'Referral', status: 'contacted', budget_min: 400000, budget_max: 600000, property_type: 'Condo', bedrooms: 2, bathrooms: 2, location: 'Brickell Miami', notes: 'Young professional seeking luxury condo' },
+      { first_name: 'David', last_name: 'Brown', email: 'david.brown@email.com', phone: '+1-555-0103', source: 'Social Media', status: 'qualified', budget_min: 180000, budget_max: 280000, property_type: 'Townhouse', bedrooms: 2, bathrooms: 1, location: 'Coral Gables', notes: 'First-time buyer, needs financing help' },
+      { first_name: 'Lisa', last_name: 'Davis', email: 'lisa.davis@email.com', phone: '+1-555-0104', source: 'Walk-in', status: 'proposal_sent', budget_min: 500000, budget_max: 800000, property_type: 'House', bedrooms: 4, bathrooms: 3, location: 'Coconut Grove', notes: 'Relocating from New York' },
+      { first_name: 'Robert', last_name: 'Miller', email: 'robert.miller@email.com', phone: '+1-555-0105', source: 'Google Ads', status: 'closed_won', budget_min: 320000, budget_max: 450000, property_type: 'Condo', bedrooms: 1, bathrooms: 1, location: 'South Beach', notes: 'Investment property buyer' }
+    ];
+
+    // Real properties data
+    const realPropertiesData = [
+      { title: 'Modern 3BR House Downtown Miami', type: 'House', price: 485000, bedrooms: 3, bathrooms: 2, square_feet: 1850, address: '1234 Biscayne Blvd, Miami, FL', city: 'Miami', state: 'FL', zip_code: '33132', status: 'available', description: 'Beautiful modern home with updated kitchen' },
+      { title: 'Luxury 2BR Condo Brickell', type: 'Condo', price: 650000, bedrooms: 2, bathrooms: 2, square_feet: 1200, address: '5678 Brickell Ave, Miami, FL', city: 'Miami', state: 'FL', zip_code: '33131', status: 'available', description: 'High-rise luxury condo with bay views' },
+      { title: 'Townhouse Coral Gables', type: 'Townhouse', price: 395000, bedrooms: 2, bathrooms: 1, square_feet: 1100, address: '9012 Coral Way, Coral Gables, FL', city: 'Coral Gables', state: 'FL', zip_code: '33134', status: 'under_contract', description: 'Historic Coral Gables townhouse' },
+      { title: 'Family Home Coconut Grove', type: 'House', price: 750000, bedrooms: 4, bathrooms: 3, square_feet: 2400, address: '3456 Grove Ave, Coconut Grove, FL', city: 'Coconut Grove', state: 'FL', zip_code: '33133', status: 'available', description: 'Large family home with pool' }
+    ];
+
+    // Create data for each user
+    for (let userIndex = 0; userIndex < users.length; userIndex++) {
+      const user = users[userIndex];
+
+      // Create 5 leads per user
+      for (let i = 0; i < 5; i++) {
+        const leadTemplate = realLeadsData[i];
+        const leadNumber = userIndex * 10 + i + 1;
+
+        try {
+          await pool.query(`
+            INSERT INTO leads (
+              first_name, last_name, email, phone, source, status,
+              budget_min, budget_max, property_type, bedrooms, bathrooms,
+              location, notes, agency_id, assigned_to
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+          `, [
+            leadTemplate.first_name + ` ${leadNumber}`,
+            leadTemplate.last_name,
+            leadTemplate.email.replace('@email.com', `${leadNumber}@email.com`),
+            leadTemplate.phone.replace('0101', `${1000 + leadNumber}`),
+            leadTemplate.source,
+            leadTemplate.status,
+            leadTemplate.budget_min + (userIndex * 5000),
+            leadTemplate.budget_max + (userIndex * 5000),
+            leadTemplate.property_type,
+            leadTemplate.bedrooms,
+            leadTemplate.bathrooms,
+            leadTemplate.location,
+            leadTemplate.notes,
+            user.agency_id,
+            user.id
+          ]);
+          totalLeadsCreated++;
+        } catch (leadError) {
+          console.log(`Lead creation failed:`, leadError.message);
+        }
+      }
+
+      // Create 4 properties per user
+      for (let i = 0; i < 4; i++) {
+        const propTemplate = realPropertiesData[i];
+        const propNumber = userIndex * 10 + i + 1;
+
+        try {
+          await pool.query(`
+            INSERT INTO properties (
+              title, type, price, bedrooms, bathrooms, square_feet,
+              address, city, state, zip_code, status, description,
+              agency_id, listed_by
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+          `, [
+            propTemplate.title + ` - ${propNumber}`,
+            propTemplate.type,
+            propTemplate.price + (userIndex * 15000),
+            propTemplate.bedrooms,
+            propTemplate.bathrooms,
+            propTemplate.square_feet + (userIndex * 50),
+            propTemplate.address.replace('1234', `${1234 + propNumber}`),
+            propTemplate.city,
+            propTemplate.state,
+            propTemplate.zip_code,
+            propTemplate.status,
+            propTemplate.description,
+            user.agency_id,
+            user.id
+          ]);
+          totalPropertiesCreated++;
+        } catch (propError) {
+          console.log(`Property creation failed:`, propError.message);
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Real data seeded successfully - NO DATA DELETED',
+      data: {
+        usersProcessed: users.length,
+        leadsCreated: totalLeadsCreated,
+        propertiesCreated: totalPropertiesCreated
+      },
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('❌ Data seeding error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to seed data',
+      error: error.message
+    });
+  }
+});
 
 
 
