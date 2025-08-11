@@ -1213,18 +1213,16 @@ router.post('/populate-complete-data', async (req, res) => {
       const user = users[userIndex];
       console.log(`👤 Creating data for ${user.first_name} ${user.last_name}`);
 
-      // Create 5 leads per user - only essential columns
+      // Create 5 leads per user - let database generate UUID
       for (let i = 0; i < 5; i++) {
         const leadNumber = userIndex * 100 + i + 1;
-        const leadId = `${Date.now()}-${userIndex}-${i}-${Math.random().toString(36).substr(2, 9)}`;
 
         try {
           await pool.query(`
             INSERT INTO leads (
-              id, first_name, last_name, email, phone, source, status, notes
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+              first_name, last_name, email, phone, source, status, notes
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7)
           `, [
-            leadId,
             `Client ${leadNumber}`,
             'Prospect',
             `client${leadNumber}@email.com`,
@@ -1239,18 +1237,16 @@ router.post('/populate-complete-data', async (req, res) => {
         }
       }
 
-      // Create 3 properties per user - only essential columns
+      // Create 3 properties per user - let database generate UUID
       for (let i = 0; i < 3; i++) {
         const propNumber = userIndex * 100 + i + 1;
-        const propId = `${Date.now()}-${userIndex}-${i}-${Math.random().toString(36).substr(2, 9)}`;
 
         try {
           await pool.query(`
             INSERT INTO properties (
-              id, title, type, price, description, status
-            ) VALUES ($1, $2, $3, $4, $5, $6)
+              title, type, price, description, status
+            ) VALUES ($1, $2, $3, $4, $5)
           `, [
-            propId,
             `Property ${propNumber} - ${['House', 'Condo', 'Townhouse'][i % 3]}`,
             ['House', 'Condo', 'Townhouse'][i % 3],
             400000 + (userIndex * 25000) + (i * 15000),
@@ -1263,21 +1259,19 @@ router.post('/populate-complete-data', async (req, res) => {
         }
       }
 
-      // Create 2 team members per user - only essential columns
+      // Create 2 team members per user - let database generate UUID and ensure unique emails
       for (let i = 0; i < 2; i++) {
-        const teamNumber = userIndex * 1000 + i + 1;
-        const teamId = `${Date.now()}-${userIndex}-${i}-${Math.random().toString(36).substr(2, 9)}`;
+        const teamNumber = userIndex * 1000 + i + 1 + Date.now(); // Make it more unique
 
         try {
           await pool.query(`
             INSERT INTO team_members (
-              id, name, email, phone, role, status
-            ) VALUES ($1, $2, $3, $4, $5, $6)
+              name, email, phone, role, status
+            ) VALUES ($1, $2, $3, $4, $5)
           `, [
-            teamId,
             `Agent ${teamNumber} ${['Smith', 'Johnson'][i % 2]}`,
             `agent${teamNumber}@agency.com`,
-            `+1-555-${2000 + teamNumber}`,
+            `+1-555-${2000 + (teamNumber % 9999)}`,
             ['agent', 'assistant'][i % 2],
             'active'
           ]);
