@@ -1220,8 +1220,8 @@ router.post('/populate-complete-data', async (req, res) => {
         try {
           await pool.query(`
             INSERT INTO leads (
-              id, first_name, last_name, email, phone, source, status, notes, agency_id, assigned_to
-            ) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9)
+              id, first_name, last_name, email, phone, source, status, notes, agency_id, assigned_to, created_at, updated_at
+            ) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
           `, [
             `Client ${leadNumber}`,
             'Prospect',
@@ -1246,8 +1246,8 @@ router.post('/populate-complete-data', async (req, res) => {
         try {
           await pool.query(`
             INSERT INTO properties (
-              id, title, type, price, description, status, agency_id, listed_by
-            ) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7)
+              id, title, type, price, description, status, agency_id, listed_by, created_at, updated_at
+            ) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
           `, [
             `Property ${propNumber} - ${['House', 'Condo', 'Townhouse'][i % 3]}`,
             ['House', 'Condo', 'Townhouse'][i % 3],
@@ -1270,16 +1270,14 @@ router.post('/populate-complete-data', async (req, res) => {
         try {
           await pool.query(`
             INSERT INTO team_members (
-              id, name, email, phone, role, status, agency_id, manager_id
-            ) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7)
+              id, name, email, phone, role, status, created_at, updated_at
+            ) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
           `, [
             `Agent ${teamNumber} ${['Smith', 'Johnson'][i % 2]}`,
             `agent${teamNumber}@agency.com`,
             `+1-555-${2000 + (teamNumber % 9999)}`,
             ['agent', 'assistant'][i % 2],
-            'active',
-            user.agency_id || 'default-agency-id',
-            user.id
+            'active'
           ]);
           totalTeamMembersCreated++;
         } catch (teamError) {
