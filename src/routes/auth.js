@@ -115,12 +115,13 @@ router.post('/login',
         });
       }
 
-      console.log('User found via:', isSequelizeUser ? 'Sequelize' : 'Raw SQL');
+      console.log('✅ User found via unified SQL query');
       console.log('User details:', {
-        id: isSequelizeUser ? user.id : user.id,
-        email: isSequelizeUser ? user.email : user.email,
-        agency_id: isSequelizeUser ? user.agency_id : user.agency_id,
-        status: isSequelizeUser ? user.status : user.status
+        id: user.id,
+        email: user.email,
+        agency_id: user.agency_id,
+        status: user.status,
+        subscriptionStatus: user.subscription_status
       });
 
       // Validate password using bcrypt (unified approach)
