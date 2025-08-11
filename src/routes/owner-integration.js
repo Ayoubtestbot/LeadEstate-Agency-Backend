@@ -1381,4 +1381,80 @@ router.get('/discover-schemas', async (req, res) => {
   }
 });
 
+// CHECK ACTUAL DATA - Verify what data exists for Sophie
+router.get('/check-data/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    console.log(`🔍 Checking data for user: ${userId}`);
+
+    // Get user info
+    const userResult = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
+    const user = userResult.rows[0];
+
+    if (!user) {
+      return res.json({ success: false, message: 'User not found' });
+    }
+
+    // Get leads for this user
+    const leadsResult = await pool.query(`
+      SELECT id, first_name, last_name, email, phone, status, source, budget, assigned_to, agency_id, created_at
+      FROM leads
+      WHERE assigned_to = $1 OR agency_id = $2
+      ORDER BY created_at DESC
+    `, [userId, user.agency_id]);
+
+    // Get properties for this user
+    const propertiesResult = await pool.query(`
+      SELECT id, title, type, price, address, city, surface, status, listed_by, agency_id, created_at
+      FROM properties
+      WHERE listed_by = $1 OR agency_id = $2
+      ORDER BY created_at DESC
+    `, [userId, user.agency_id]);
+
+    // Get team members
+    const teamResult = await pool.query(`
+      SELECT id, name, email, phone, role, department, status, created_at
+      FROM team_members
+      ORDER BY created_at DESC
+    `);
+
+    // Get all leads (for debugging)
+    const allLeadsResult = await pool.query('SELECT COUNT(*) as total FROM leads');
+    const allPropertiesResult = await pool.query('SELECT COUNT(*) as total FROM properties');
+    const allTeamResult = await pool.query('SELECT COUNT(*) as total FROM team_members');
+
+    res.json({
+      success: true,
+      user: {
+        id: user.id,
+        name: `${user.first_name} ${user.last_name}`,
+        email: user.email,
+        agency_id: user.agency_id,
+        role: user.role
+      },
+      data: {
+        leads: leadsResult.rows,
+        properties: propertiesResult.rows,
+        teamMembers: teamResult.rows
+      },
+      totals: {
+        allLeads: allLeadsResult.rows[0].total,
+        allProperties: allPropertiesResult.rows[0].total,
+        allTeamMembers: allTeamResult.rows[0].total,
+        userLeads: leadsResult.rows.length,
+        userProperties: propertiesResult.rows.length
+      },
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('❌ Data check error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to check data',
+      error: error.message
+    });
+  }
+});
+
 module.exports = router;
