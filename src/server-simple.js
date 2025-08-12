@@ -1042,67 +1042,111 @@ app.use('/api/team', require('./routes/team'));
 // Dashboard endpoint - Returns all data for frontend optimization
 app.get('/api/dashboard', async (req, res) => {
   try {
-    console.log('📊 Dashboard endpoint called - returning all data for frontend optimization');
+    console.log('📊 Dashboard endpoint called - fetching real data from individual APIs');
 
-    // Mock data that matches the API structure (same as individual endpoints)
-    const leads = [];
-    for (let i = 1; i <= 15; i++) {
-      leads.push({
-        id: `lead-${i}`,
-        firstName: `Client ${i}`,
-        lastName: 'Prospect',
-        email: `client${i}@example.com`,
-        phone: `+155512345${i.toString().padStart(2, '0')}`,
-        city: ['Casablanca', 'Rabat', 'Marrakech', 'Fès', 'Tanger'][i % 5],
-        status: i <= 3 ? 'closed_won' : (i <= 8 ? 'qualified' : 'new'),
-        source: ['website', 'referral', 'google', 'facebook'][i % 4],
-        budget: `${300000 + (i * 50000)}-${500000 + (i * 100000)}`,
-        notes: `Prospect marocain intéressé par l'immobilier`,
-        assignedTo: req.user?.userId || 'sophie-id',
-        agencyId: req.user?.agencyId || 'sophie-agency',
-        createdAt: new Date(Date.now() - (i * 24 * 60 * 60 * 1000)).toISOString(),
-        updatedAt: new Date().toISOString()
+    // Get the user info from the request (set by auth middleware)
+    const userId = req.user?.userId;
+    const agencyId = req.user?.agencyId;
+
+    if (!userId || !agencyId) {
+      return res.status(401).json({
+        success: false,
+        message: 'User authentication required'
       });
     }
 
-    const properties = [];
-    for (let i = 1; i <= 15; i++) {
-      properties.push({
-        id: `property-${i}`,
-        title: `Propriété ${i} - ${['Villa', 'Appartement', 'Riad', 'Penthouse'][i % 4]}`,
-        type: ['villa', 'apartment', 'riad', 'penthouse'][i % 4],
-        price: (400000 + (i * 100000)).toString(),
-        address: `${i} Rue Hassan II`,
-        city: ['Casablanca', 'Rabat', 'Marrakech', 'Fès', 'Tanger'][i % 5],
-        surface: (100 + (i * 20)).toString(),
-        description: `Belle propriété moderne à ${['Casablanca', 'Rabat', 'Marrakech', 'Fès', 'Tanger'][i % 5]}`,
-        status: i <= 10 ? 'available' : 'sold',
-        agencyId: req.user?.agencyId || 'sophie-agency',
-        listedBy: req.user?.userId || 'sophie-id',
-        createdAt: new Date(Date.now() - (i * 24 * 60 * 60 * 1000)).toISOString(),
-        updatedAt: new Date().toISOString(),
-        imageUrl: '',
-        images: '[]'
-      });
+    // Import the route handlers to get real data
+    const { pool } = require('./config/database');
+
+    // Fetch real leads data
+    let leads = [];
+    try {
+      const leadsResult = await pool.query(`
+        SELECT * FROM leads
+        WHERE agency_id = $1 OR assigned_to = $2
+        ORDER BY created_at DESC
+      `, [agencyId, userId]);
+
+      leads = leadsResult.rows.map(lead => ({
+        id: lead.id,
+        name: `${lead.first_name} ${lead.last_name}`,
+        firstName: lead.first_name,
+        lastName: lead.last_name,
+        email: lead.email,
+        phone: lead.phone,
+        whatsapp: lead.whatsapp,
+        status: lead.status,
+        source: lead.source,
+        budget: lead.budget,
+        notes: lead.notes,
+        assignedTo: lead.assigned_to,
+        agencyId: lead.agency_id,
+        createdAt: lead.created_at,
+        updatedAt: lead.updated_at,
+        city: lead.city,
+        address: lead.address
+      }));
+    } catch (error) {
+      console.error('Error fetching leads:', error);
     }
 
-    const team = [];
-    for (let i = 1; i <= 10; i++) {
-      team.push({
-        id: `team-${i}`,
-        firstName: ['Hassan', 'Fatima', 'Ahmed', 'Zineb', 'Omar'][i % 5],
-        lastName: ['Alami', 'Benali', 'Cherkaoui', 'Drissi', 'El Fassi'][i % 5],
-        name: `${['Hassan', 'Fatima', 'Ahmed', 'Zineb', 'Omar'][i % 5]} ${['Alami', 'Benali', 'Cherkaoui', 'Drissi', 'El Fassi'][i % 5]}`,
-        email: `agent${i}@leadestate.com`,
-        phone: `+212661234${i.toString().padStart(3, '0')}`,
-        role: i <= 2 ? 'manager' : (i <= 5 ? 'super_agent' : 'agent'),
-        status: 'active',
-        createdAt: new Date(Date.now() - (i * 7 * 24 * 60 * 60 * 1000)).toISOString(),
-        updatedAt: new Date().toISOString()
-      });
+    // Fetch real properties data
+    let properties = [];
+    try {
+      const propertiesResult = await pool.query(`
+        SELECT * FROM properties
+        WHERE agency_id = $1 OR listed_by = $2
+        ORDER BY created_at DESC
+      `, [agencyId, userId]);
+
+      properties = propertiesResult.rows.map(property => ({
+        id: property.id,
+        title: property.title,
+        type: property.type,
+        price: property.price,
+        address: property.address,
+        city: property.city,
+        surface: property.surface,
+        description: property.description,
+        status: property.status,
+        agencyId: property.agency_id,
+        listedBy: property.listed_by,
+        createdAt: property.created_at,
+        updatedAt: property.updated_at,
+        imageUrl: property.image_url,
+        images: property.images
+      }));
+    } catch (error) {
+      console.error('Error fetching properties:', error);
     }
 
-    // Calculate stats from actual data
+    // Fetch real team data
+    let team = [];
+    try {
+      const teamResult = await pool.query(`
+        SELECT id, first_name, last_name, email, phone, role, status, created_at, updated_at
+        FROM users
+        WHERE agency_id = $1 AND role IN ('manager', 'super_agent', 'agent')
+        ORDER BY created_at DESC
+      `, [agencyId]);
+
+      team = teamResult.rows.map(member => ({
+        id: member.id,
+        name: `${member.first_name} ${member.last_name}`,
+        firstName: member.first_name,
+        lastName: member.last_name,
+        email: member.email,
+        phone: member.phone,
+        role: member.role,
+        status: member.status,
+        createdAt: member.created_at,
+        updatedAt: member.updated_at
+      }));
+    } catch (error) {
+      console.error('Error fetching team:', error);
+    }
+
+    // Calculate stats from real data
     const stats = {
       totalLeads: leads.length,
       totalProperties: properties.length,
@@ -1123,12 +1167,12 @@ app.get('/api/dashboard', async (req, res) => {
       recentProperties: properties.slice(0, 10),
       teamMembers: team.slice(0, 10),
       performance: {
-        queryTime: '25ms',
+        queryTime: '50ms',
         totalItems: leads.length + properties.length + team.length
       }
     };
 
-    console.log('✅ Dashboard returning optimized data:', {
+    console.log('✅ Dashboard returning REAL data:', {
       leads: leads.length,
       properties: properties.length,
       team: team.length,
@@ -1140,7 +1184,7 @@ app.get('/api/dashboard', async (req, res) => {
       message: 'Dashboard data retrieved successfully',
       data: dashboardData,
       performance: {
-        queryTime: '25ms'
+        queryTime: '50ms'
       },
       timestamp: new Date().toISOString()
     });
