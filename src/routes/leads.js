@@ -28,6 +28,7 @@ router.get('/', async (req, res) => {
 
         leads = leadsResult.rows.map(lead => ({
           id: lead.id,
+          name: `${lead.first_name} ${lead.last_name}`, // Frontend expects 'name'
           firstName: lead.first_name,
           lastName: lead.last_name,
           email: lead.email,
