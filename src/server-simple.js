@@ -740,6 +740,49 @@ app.post('/api/populate-test-data', async (req, res) => {
 // Basic auth routes
 app.use('/api/auth', require('./routes/auth'));
 
+// Protected routes (require authentication)
+app.use('/api/leads', require('./routes/leads'));
+app.use('/api/properties', require('./routes/properties'));
+app.use('/api/team', require('./routes/team'));
+
+// Dashboard endpoint
+app.get('/api/dashboard', async (req, res) => {
+  try {
+    // Mock dashboard data for now
+    const dashboardData = {
+      stats: {
+        totalLeads: 15,
+        totalProperties: 15,
+        closedWonLeads: 3,
+        conversionRate: '20.0'
+      },
+      recentLeads: [],
+      recentProperties: [],
+      teamMembers: [],
+      activities: [],
+      performance: {
+        thisMonth: { leads: 15, properties: 15, conversions: 3 },
+        lastMonth: { leads: 12, properties: 12, conversions: 2 }
+      }
+    };
+
+    res.json({
+      success: true,
+      message: 'Dashboard data retrieved successfully',
+      data: dashboardData,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('Dashboard error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve dashboard data',
+      error: error.message
+    });
+  }
+});
+
 // 404 handler
 app.use('*', (req, res) => {
   res.status(404).json({
