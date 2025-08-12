@@ -843,6 +843,193 @@ app.post('/api/populate-test-data', async (req, res) => {
   }
 });
 
+// Comprehensive Moroccan data population endpoint
+app.post('/api/populate-comprehensive-data', async (req, res) => {
+  try {
+    const { agency_id, user_id, team_members, leads_count = 100, properties_count = 50 } = req.body;
+
+    if (!agency_id || !user_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'agency_id and user_id are required'
+      });
+    }
+
+    console.log(`🇲🇦 Creating comprehensive Moroccan CRM data for agency: ${agency_id}`);
+
+    const { pool } = require('./config/database');
+    const bcrypt = require('bcrypt');
+
+    // Moroccan data arrays
+    const moroccanFirstNames = [
+      'Ahmed', 'Mohammed', 'Hassan', 'Omar', 'Youssef', 'Khalid', 'Abdelaziz', 'Rachid', 'Said', 'Mustapha',
+      'Fatima', 'Aicha', 'Khadija', 'Zineb', 'Amina', 'Laila', 'Nadia', 'Samira', 'Houda', 'Malika',
+      'Abderrahim', 'Abdelkader', 'Brahim', 'Driss', 'Hamid', 'Jamal', 'Karim', 'Larbi', 'Mehdi', 'Noureddine',
+      'Btissam', 'Ghizlane', 'Hafida', 'Ibtissam', 'Jamila', 'Karima', 'Latifa', 'Meryem', 'Nawal', 'Rajae'
+    ];
+
+    const moroccanLastNames = [
+      'Alami', 'Benali', 'Cherkaoui', 'Drissi', 'El Fassi', 'Filali', 'Ghazi', 'Hajji', 'Idrissi', 'Jebari',
+      'Kettani', 'Lahlou', 'Mabrouk', 'Naciri', 'Ouali', 'Qadiri', 'Rami', 'Sabri', 'Tazi', 'Wahbi',
+      'Amrani', 'Berrada', 'Chraibi', 'Douiri', 'El Alaoui', 'Fassi Fihri', 'Guerraoui', 'Hakim', 'Iraqi', 'Jaidi'
+    ];
+
+    const moroccanCities = [
+      'Casablanca', 'Rabat', 'Marrakech', 'Fès', 'Tanger', 'Agadir', 'Meknès', 'Oujda', 'Kenitra', 'Tétouan',
+      'Safi', 'Mohammedia', 'Khouribga', 'Beni Mellal', 'El Jadida', 'Nador', 'Taza', 'Settat', 'Larache', 'Ksar El Kebir'
+    ];
+
+    const propertyTypes = ['apartment', 'villa', 'house', 'riad', 'penthouse'];
+    const leadSources = ['website', 'facebook', 'google', 'referral', 'walk-in', 'phone', 'whatsapp'];
+    const leadStatuses = ['new', 'contacted', 'qualified', 'proposal', 'negotiation', 'closed_won', 'closed_lost'];
+
+    function getRandomElement(array) {
+      return array[Math.floor(Math.random() * array.length)];
+    }
+
+    function generateMoroccanPhone() {
+      const prefixes = ['06', '07'];
+      const prefix = getRandomElement(prefixes);
+      const number = Math.floor(Math.random() * 90000000) + 10000000;
+      return `+212${prefix}${number.toString().substring(0, 8)}`;
+    }
+
+    function generateEmail(firstName, lastName) {
+      const domains = ['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com'];
+      const cleanFirst = firstName.toLowerCase().replace(/[^a-z]/g, '');
+      const cleanLast = lastName.toLowerCase().replace(/[^a-z]/g, '');
+      return `${cleanFirst}.${cleanLast}${Math.floor(Math.random() * 999)}@${getRandomElement(domains)}`;
+    }
+
+    // Step 1: Create team members
+    console.log('👥 Creating team members...');
+    const createdTeamMembers = [];
+
+    if (team_members && team_members.length > 0) {
+      for (const member of team_members) {
+        try {
+          const hashedPassword = await bcrypt.hash(member.password, 12);
+          const memberResult = await pool.query(`
+            INSERT INTO users (email, password, first_name, last_name, role, phone, agency_id, status, email_verified, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
+            RETURNING id, email, first_name, last_name, role
+          `, [
+            member.email,
+            hashedPassword,
+            member.first_name,
+            member.last_name,
+            member.role,
+            member.phone,
+            agency_id,
+            'active',
+            true
+          ]);
+          createdTeamMembers.push(memberResult.rows[0]);
+          console.log(`✅ Created team member: ${member.first_name} ${member.last_name} (${member.role})`);
+        } catch (error) {
+          console.log(`⚠️ Team member ${member.email} might already exist, skipping...`);
+        }
+      }
+    }
+
+    // Get all team members for assignment (including existing ones)
+    const allTeamResult = await pool.query(`
+      SELECT id, first_name, last_name, role FROM users
+      WHERE agency_id = $1 AND role IN ('manager', 'super_agent', 'agent')
+    `, [agency_id]);
+    const allTeamMembers = allTeamResult.rows;
+
+    // Step 2: Create 100 Moroccan leads
+    console.log(`📋 Creating ${leads_count} Moroccan leads...`);
+    const createdLeads = [];
+
+    for (let i = 1; i <= leads_count; i++) {
+      const firstName = getRandomElement(moroccanFirstNames);
+      const lastName = getRandomElement(moroccanLastNames);
+      const city = getRandomElement(moroccanCities);
+      const assignedTo = allTeamMembers.length > 0 ? getRandomElement(allTeamMembers).id : user_id;
+
+      try {
+        const leadResult = await pool.query(`
+          INSERT INTO leads (first_name, last_name, email, phone, city, status, source, budget, notes, assigned_to, agency_id, created_at, updated_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
+          RETURNING id
+        `, [
+          firstName,
+          lastName,
+          generateEmail(firstName, lastName),
+          generateMoroccanPhone(),
+          city,
+          getRandomElement(leadStatuses),
+          getRandomElement(leadSources),
+          `${Math.floor(Math.random() * 2000000) + 500000}-${Math.floor(Math.random() * 5000000) + 1000000}`,
+          `Prospect intéressé par l'immobilier à ${city}. ${getRandomElement(['Recherche appartement', 'Recherche villa', 'Premier achat', 'Investissement locatif'])}.`,
+          assignedTo,
+          agency_id
+        ]);
+        createdLeads.push(leadResult.rows[0]);
+      } catch (error) {
+        console.log(`⚠️ Error creating lead ${i}:`, error.message);
+      }
+    }
+
+    // Step 3: Create 50 Moroccan properties
+    console.log(`🏠 Creating ${properties_count} Moroccan properties...`);
+    const createdProperties = [];
+
+    for (let i = 1; i <= properties_count; i++) {
+      const city = getRandomElement(moroccanCities);
+      const propertyType = getRandomElement(propertyTypes);
+      const listedBy = allTeamMembers.length > 0 ? getRandomElement(allTeamMembers).id : user_id;
+
+      try {
+        const propertyResult = await pool.query(`
+          INSERT INTO properties (title, description, price, property_type, bedrooms, bathrooms, square_feet, address, city, state, zip_code, status, agency_id, listed_by, created_at, updated_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW(), NOW())
+          RETURNING id
+        `, [
+          `${propertyType.charAt(0).toUpperCase() + propertyType.slice(1)} moderne à ${city}`,
+          `Magnifique ${propertyType} situé dans un quartier prisé de ${city}. Proche des commodités et transports.`,
+          Math.floor(Math.random() * 3000000) + 800000,
+          propertyType,
+          Math.floor(Math.random() * 4) + 2,
+          Math.floor(Math.random() * 3) + 1,
+          Math.floor(Math.random() * 200) + 80,
+          `${Math.floor(Math.random() * 200) + 1} Rue ${getRandomElement(['Hassan II', 'Mohammed V', 'Atlas', 'Anfa', 'Majorelle'])}`,
+          city,
+          city === 'Casablanca' ? 'Grand Casablanca' : city === 'Rabat' ? 'Rabat-Salé-Kénitra' : 'Maroc',
+          `${Math.floor(Math.random() * 90000) + 10000}`,
+          Math.random() > 0.2 ? 'active' : 'sold',
+          agency_id,
+          listedBy
+        ]);
+        createdProperties.push(propertyResult.rows[0]);
+      } catch (error) {
+        console.log(`⚠️ Error creating property ${i}:`, error.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Comprehensive Moroccan CRM data populated successfully for agency ${agency_id}`,
+      data: {
+        teamMembers: createdTeamMembers.length,
+        totalTeamMembers: allTeamMembers.length,
+        leads: createdLeads.length,
+        properties: createdProperties.length
+      }
+    });
+
+  } catch (error) {
+    console.error('Populate comprehensive data error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to populate comprehensive data',
+      error: error.message
+    });
+  }
+});
+
 // Basic auth routes
 app.use('/api/auth', require('./routes/auth'));
 
