@@ -737,132 +737,119 @@ app.post('/api/populate-test-data', async (req, res) => {
   }
 });
 
+// Endpoint to populate test data for Sophie's agency
+app.post('/api/populate-test-data', async (req, res) => {
+  try {
+    const { agency_id, user_id } = req.body;
+
+    if (!agency_id || !user_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'agency_id and user_id are required'
+      });
+    }
+
+    console.log(`🔄 Populating test data for agency: ${agency_id}, user: ${user_id}`);
+
+    const { pool } = require('./config/database');
+
+    // Create test leads
+    const testLeads = [];
+    for (let i = 1; i <= 15; i++) {
+      const leadResult = await pool.query(`
+        INSERT INTO leads (first_name, last_name, email, phone, city, status, source, budget, notes, assigned_to, agency_id, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
+        RETURNING id
+      `, [
+        `Client ${i}`,
+        'Prospect',
+        `client${i}@example.com`,
+        `+155512345${i.toString().padStart(2, '0')}`,
+        'Paris',
+        i <= 3 ? 'closed_won' : (i <= 8 ? 'qualified' : 'new'),
+        ['website', 'referral', 'google', 'facebook'][i % 4],
+        `${300000 + (i * 50000)}-${500000 + (i * 100000)}`,
+        `Test lead ${i} - interested in ${['apartment', 'house', 'condo', 'villa'][i % 4]}`,
+        user_id,
+        agency_id
+      ]);
+      testLeads.push(leadResult.rows[0]);
+    }
+
+    // Create test properties
+    const testProperties = [];
+    for (let i = 1; i <= 15; i++) {
+      const propertyResult = await pool.query(`
+        INSERT INTO properties (title, description, price, property_type, bedrooms, bathrooms, square_feet, address, city, state, zip_code, status, agency_id, listed_by, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW(), NOW())
+        RETURNING id
+      `, [
+        `Property ${i} - ${['House', 'Condo', 'Villa', 'Apartment'][i % 4]}`,
+        `Beautiful ${['house', 'condo', 'villa', 'apartment'][i % 4]} in prime location`,
+        400000 + (i * 100000),
+        ['house', 'condo', 'villa', 'apartment'][i % 4],
+        (i % 4) + 1,
+        (i % 3) + 1,
+        1000 + (i * 200),
+        `${i} Test Street`,
+        'Paris',
+        'Île-de-France',
+        `7500${i}`,
+        i <= 10 ? 'active' : 'sold',
+        agency_id,
+        user_id
+      ]);
+      testProperties.push(propertyResult.rows[0]);
+    }
+
+    // Create test team members
+    const testTeamMembers = [];
+    for (let i = 1; i <= 10; i++) {
+      const memberResult = await pool.query(`
+        INSERT INTO users (email, password, first_name, last_name, role, phone, agency_id, status, email_verified, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
+        RETURNING id
+      `, [
+        `agent${i}@leadestate.com`,
+        '$2b$12$dummy.hash.for.testing.purposes.only',
+        `Agent ${i}`,
+        ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones'][i % 5],
+        i <= 3 ? 'super_agent' : 'agent',
+        `+1555${1000 + i}`,
+        agency_id,
+        'active',
+        true
+      ]);
+      testTeamMembers.push(memberResult.rows[0]);
+    }
+
+    res.json({
+      success: true,
+      message: `Test data populated successfully for agency ${agency_id}`,
+      data: {
+        leads: testLeads.length,
+        properties: testProperties.length,
+        teamMembers: testTeamMembers.length
+      }
+    });
+
+  } catch (error) {
+    console.error('Populate test data error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to populate test data',
+      error: error.message
+    });
+  }
+});
+
 // Basic auth routes
 app.use('/api/auth', require('./routes/auth'));
 
-// Leads endpoint
-app.get('/api/leads', async (req, res) => {
-  try {
-    // Mock leads data
-    const mockLeads = [];
-    for (let i = 1; i <= 15; i++) {
-      mockLeads.push({
-        id: `lead-${i}`,
-        first_name: `Client ${i}`,
-        last_name: 'Prospect',
-        email: `client${i}@example.com`,
-        phone: `+155512345${i.toString().padStart(2, '0')}`,
-        city: 'Paris',
-        status: i <= 3 ? 'closed_won' : (i <= 8 ? 'qualified' : 'new'),
-        source: ['website', 'referral', 'google', 'facebook'][i % 4],
-        budget_min: 300000 + (i * 50000),
-        budget_max: 500000 + (i * 100000),
-        property_type: ['apartment', 'house', 'condo', 'villa'][i % 4],
-        bedrooms: (i % 4) + 1,
-        bathrooms: (i % 3) + 1,
-        notes: `Test lead ${i} - interested in ${['apartment', 'house', 'condo', 'villa'][i % 4]}`,
-        priority: i <= 5 ? 'high' : (i <= 10 ? 'medium' : 'low'),
-        score: 50 + (i * 3),
-        created_at: new Date(Date.now() - (i * 24 * 60 * 60 * 1000)).toISOString(),
-        updated_at: new Date().toISOString()
-      });
-    }
-
-    res.json({
-      success: true,
-      message: 'Leads retrieved successfully',
-      data: mockLeads,
-      timestamp: new Date().toISOString()
-    });
-
-  } catch (error) {
-    console.error('Leads error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to retrieve leads',
-      error: error.message
-    });
-  }
-});
-
-// Team endpoint
-app.get('/api/team', async (req, res) => {
-  try {
-    // Mock team data
-    const mockTeam = [];
-    for (let i = 1; i <= 10; i++) {
-      mockTeam.push({
-        id: `team-${i}`,
-        first_name: `Agent ${i}`,
-        last_name: ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones'][i % 5],
-        email: `agent${i}@leadestate.com`,
-        role: i <= 3 ? 'super_agent' : 'agent',
-        phone: `+1555${1000 + i}`,
-        status: 'active',
-        created_at: new Date(Date.now() - (i * 7 * 24 * 60 * 60 * 1000)).toISOString(),
-        last_login_at: new Date(Date.now() - (i * 60 * 60 * 1000)).toISOString()
-      });
-    }
-
-    res.json({
-      success: true,
-      message: 'Team members retrieved successfully',
-      data: mockTeam,
-      timestamp: new Date().toISOString()
-    });
-
-  } catch (error) {
-    console.error('Team error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to retrieve team members',
-      error: error.message
-    });
-  }
-});
-
-// Properties endpoint
-app.get('/api/properties', async (req, res) => {
-  try {
-    // Mock properties data
-    const mockProperties = [];
-    for (let i = 1; i <= 15; i++) {
-      mockProperties.push({
-        id: `property-${i}`,
-        title: `Property ${i} - ${['House', 'Condo', 'Villa', 'Apartment'][i % 4]}`,
-        description: `Beautiful ${['house', 'condo', 'villa', 'apartment'][i % 4]} in prime location`,
-        price: 400000 + (i * 100000),
-        property_type: ['house', 'condo', 'villa', 'apartment'][i % 4],
-        bedrooms: (i % 4) + 1,
-        bathrooms: (i % 3) + 1,
-        square_feet: 1000 + (i * 200),
-        address: `${i} Test Street`,
-        city: 'Paris',
-        state: 'Île-de-France',
-        zip_code: `7500${i}`,
-        status: i <= 10 ? 'active' : 'sold',
-        images: [`https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=800&h=600&fit=crop&crop=center&q=80`],
-        created_at: new Date(Date.now() - (i * 24 * 60 * 60 * 1000)).toISOString(),
-        updated_at: new Date().toISOString()
-      });
-    }
-
-    res.json({
-      success: true,
-      message: 'Properties retrieved successfully',
-      data: mockProperties,
-      timestamp: new Date().toISOString()
-    });
-
-  } catch (error) {
-    console.error('Properties error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to retrieve properties',
-      error: error.message
-    });
-  }
-});
+// Protected routes (require authentication)
+app.use('/api/leads', require('./routes/leads'));
+app.use('/api/properties', require('./routes/properties'));
+app.use('/api/team', require('./routes/team'));
 
 // Dashboard endpoint
 app.get('/api/dashboard', async (req, res) => {
