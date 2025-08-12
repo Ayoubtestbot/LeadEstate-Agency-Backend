@@ -46,15 +46,15 @@ router.get('/', async (req, res) => {
     };
 
     try {
-      // Get leads data for this agency
+      // Get leads data for this agency - use same logic as leads endpoint
       const leadsResult = await pool.query(`
-        SELECT 
+        SELECT
           COUNT(*) as total,
           COUNT(CASE WHEN status = 'closed_won' THEN 1 END) as closed_won,
           COUNT(CASE WHEN created_at >= date_trunc('month', CURRENT_DATE) THEN 1 END) as this_month
-        FROM leads 
-        WHERE agency_id = $1
-      `, [agencyId]);
+        FROM leads
+        WHERE agency_id = $1 OR assigned_to = $2
+      `, [agencyId, userId]);
 
       if (leadsResult.rows.length > 0) {
         const leadStats = leadsResult.rows[0];
