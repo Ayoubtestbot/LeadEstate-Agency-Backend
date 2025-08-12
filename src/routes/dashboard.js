@@ -174,43 +174,60 @@ router.get('/', async (req, res) => {
       trialStatus: dashboardData.trial?.status
     });
 
+    // Format response for frontend compatibility
+    const frontendCompatibleData = {
+      ...dashboardData,
+      data: {
+        leads: dashboardData.recentLeads || [],
+        properties: dashboardData.recentProperties || [],
+        team: dashboardData.teamMembers || []
+      }
+    };
+
     res.json({
       success: true,
-      data: dashboardData,
+      data: frontendCompatibleData,
       timestamp: new Date().toISOString()
     });
 
   } catch (error) {
     console.error('❌ Dashboard error:', error);
     
-    // Return fallback data on error
+    // Return fallback data on error with frontend-compatible structure
+    const fallbackData = {
+      stats: {
+        totalLeads: 0,
+        totalProperties: 0,
+        totalTeamMembers: 1,
+        conversionRate: 0,
+        closedWonLeads: 0,
+        availableProperties: 0
+      },
+      recentLeads: [],
+      recentProperties: [],
+      teamMembers: [],
+      activities: [],
+      performance: {
+        thisMonth: { leads: 0, properties: 0, conversions: 0 },
+        lastMonth: { leads: 0, properties: 0, conversions: 0 }
+      },
+      trial: req.user?.subscriptionStatus === 'trial' ? {
+        status: 'trial',
+        endDate: req.user?.trialEndDate,
+        daysRemaining: req.user?.trialEndDate ?
+          Math.max(0, Math.ceil((new Date(req.user.trialEndDate) - new Date()) / (1000 * 60 * 60 * 24))) : 0,
+        plan: req.user?.planName || 'starter'
+      } : null,
+      data: {
+        leads: [],
+        properties: [],
+        team: []
+      }
+    };
+
     res.json({
       success: true,
-      data: {
-        stats: {
-          totalLeads: 0,
-          totalProperties: 0,
-          totalTeamMembers: 1,
-          conversionRate: 0,
-          closedWonLeads: 0,
-          availableProperties: 0
-        },
-        recentLeads: [],
-        recentProperties: [],
-        teamMembers: [],
-        activities: [],
-        performance: {
-          thisMonth: { leads: 0, properties: 0, conversions: 0 },
-          lastMonth: { leads: 0, properties: 0, conversions: 0 }
-        },
-        trial: req.user?.subscriptionStatus === 'trial' ? {
-          status: 'trial',
-          endDate: req.user?.trialEndDate,
-          daysRemaining: req.user?.trialEndDate ? 
-            Math.max(0, Math.ceil((new Date(req.user.trialEndDate) - new Date()) / (1000 * 60 * 60 * 24))) : 0,
-          plan: req.user?.planName || 'starter'
-        } : null
-      },
+      data: fallbackData,
       timestamp: new Date().toISOString(),
       fallback: true,
       error: error.message
