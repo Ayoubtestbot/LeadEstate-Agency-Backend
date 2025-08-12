@@ -174,7 +174,7 @@ router.get('/', async (req, res) => {
       trialStatus: dashboardData.trial?.status
     });
 
-    // Format response for frontend compatibility
+    // Format response for frontend compatibility - populate the data arrays
     const frontendCompatibleData = {
       ...dashboardData,
       data: {
@@ -183,6 +183,11 @@ router.get('/', async (req, res) => {
         team: dashboardData.teamMembers || []
       }
     };
+
+    console.log('📊 Dashboard data prepared:');
+    console.log('- Leads:', frontendCompatibleData.data.leads.length);
+    console.log('- Properties:', frontendCompatibleData.data.properties.length);
+    console.log('- Team:', frontendCompatibleData.data.team.length);
 
     res.json({
       success: true,
