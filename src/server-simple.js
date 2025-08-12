@@ -740,10 +740,129 @@ app.post('/api/populate-test-data', async (req, res) => {
 // Basic auth routes
 app.use('/api/auth', require('./routes/auth'));
 
-// Protected routes (require authentication)
-app.use('/api/leads', require('./routes/leads'));
-app.use('/api/properties', require('./routes/properties'));
-app.use('/api/team', require('./routes/team'));
+// Leads endpoint
+app.get('/api/leads', async (req, res) => {
+  try {
+    // Mock leads data
+    const mockLeads = [];
+    for (let i = 1; i <= 15; i++) {
+      mockLeads.push({
+        id: `lead-${i}`,
+        first_name: `Client ${i}`,
+        last_name: 'Prospect',
+        email: `client${i}@example.com`,
+        phone: `+155512345${i.toString().padStart(2, '0')}`,
+        city: 'Paris',
+        status: i <= 3 ? 'closed_won' : (i <= 8 ? 'qualified' : 'new'),
+        source: ['website', 'referral', 'google', 'facebook'][i % 4],
+        budget_min: 300000 + (i * 50000),
+        budget_max: 500000 + (i * 100000),
+        property_type: ['apartment', 'house', 'condo', 'villa'][i % 4],
+        bedrooms: (i % 4) + 1,
+        bathrooms: (i % 3) + 1,
+        notes: `Test lead ${i} - interested in ${['apartment', 'house', 'condo', 'villa'][i % 4]}`,
+        priority: i <= 5 ? 'high' : (i <= 10 ? 'medium' : 'low'),
+        score: 50 + (i * 3),
+        created_at: new Date(Date.now() - (i * 24 * 60 * 60 * 1000)).toISOString(),
+        updated_at: new Date().toISOString()
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Leads retrieved successfully',
+      data: mockLeads,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('Leads error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve leads',
+      error: error.message
+    });
+  }
+});
+
+// Team endpoint
+app.get('/api/team', async (req, res) => {
+  try {
+    // Mock team data
+    const mockTeam = [];
+    for (let i = 1; i <= 10; i++) {
+      mockTeam.push({
+        id: `team-${i}`,
+        first_name: `Agent ${i}`,
+        last_name: ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones'][i % 5],
+        email: `agent${i}@leadestate.com`,
+        role: i <= 3 ? 'super_agent' : 'agent',
+        phone: `+1555${1000 + i}`,
+        status: 'active',
+        created_at: new Date(Date.now() - (i * 7 * 24 * 60 * 60 * 1000)).toISOString(),
+        last_login_at: new Date(Date.now() - (i * 60 * 60 * 1000)).toISOString()
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Team members retrieved successfully',
+      data: mockTeam,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('Team error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve team members',
+      error: error.message
+    });
+  }
+});
+
+// Properties endpoint
+app.get('/api/properties', async (req, res) => {
+  try {
+    // Mock properties data
+    const mockProperties = [];
+    for (let i = 1; i <= 15; i++) {
+      mockProperties.push({
+        id: `property-${i}`,
+        title: `Property ${i} - ${['House', 'Condo', 'Villa', 'Apartment'][i % 4]}`,
+        description: `Beautiful ${['house', 'condo', 'villa', 'apartment'][i % 4]} in prime location`,
+        price: 400000 + (i * 100000),
+        property_type: ['house', 'condo', 'villa', 'apartment'][i % 4],
+        bedrooms: (i % 4) + 1,
+        bathrooms: (i % 3) + 1,
+        square_feet: 1000 + (i * 200),
+        address: `${i} Test Street`,
+        city: 'Paris',
+        state: 'Île-de-France',
+        zip_code: `7500${i}`,
+        status: i <= 10 ? 'active' : 'sold',
+        images: [`https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=800&h=600&fit=crop&crop=center&q=80`],
+        created_at: new Date(Date.now() - (i * 24 * 60 * 60 * 1000)).toISOString(),
+        updated_at: new Date().toISOString()
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Properties retrieved successfully',
+      data: mockProperties,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('Properties error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve properties',
+      error: error.message
+    });
+  }
+});
 
 // Dashboard endpoint
 app.get('/api/dashboard', async (req, res) => {
