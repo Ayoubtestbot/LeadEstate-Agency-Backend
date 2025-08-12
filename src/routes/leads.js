@@ -52,19 +52,9 @@ router.get('/', async (req, res) => {
       }
     }
 
-    // Add trial info to response if available
-    const responseData = {
-      data: leads,
-      subscription: req.subscription ? {
-        planName: req.subscription.planName,
-        status: req.subscription.status,
-        limits: req.subscription.limits
-      } : null,
-      trial: req.trialInfo || null
-    };
-
+    // Return leads directly in data field for frontend compatibility
     res.status(HTTP_STATUS.OK).json(
-      formatResponse(true, 'Leads retrieved successfully', responseData)
+      formatResponse(true, 'Leads retrieved successfully', leads)
     );
   } catch (error) {
     console.error('❌ Leads endpoint error:', error);

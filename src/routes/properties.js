@@ -51,7 +51,7 @@ router.get('/', async (req, res) => {
     }
 
     res.status(HTTP_STATUS.OK).json(
-      formatResponse(true, 'Properties retrieved successfully', { data: properties })
+      formatResponse(true, 'Properties retrieved successfully', properties)
     );
   } catch (error) {
     console.error('❌ Properties endpoint error:', error);

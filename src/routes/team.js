@@ -45,7 +45,7 @@ router.get('/', async (req, res) => {
     }
 
     res.status(HTTP_STATUS.OK).json(
-      formatResponse(true, 'Team members retrieved successfully', { data: teamMembers })
+      formatResponse(true, 'Team members retrieved successfully', teamMembers)
     );
   } catch (error) {
     console.error('❌ Team endpoint error:', error);
