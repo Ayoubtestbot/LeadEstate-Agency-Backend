@@ -67,14 +67,14 @@ router.get('/', async (req, res) => {
         }
       }
 
-      // Get recent leads
+      // Get recent leads - use same logic as leads endpoint
       const recentLeadsResult = await pool.query(`
         SELECT id, first_name, last_name, email, phone, status, source, created_at
-        FROM leads 
-        WHERE agency_id = $1 
-        ORDER BY created_at DESC 
+        FROM leads
+        WHERE agency_id = $1 OR assigned_to = $2
+        ORDER BY created_at DESC
         LIMIT 10
-      `, [agencyId]);
+      `, [agencyId, userId]);
 
       dashboardData.recentLeads = recentLeadsResult.rows.map(lead => ({
         id: lead.id,
@@ -109,14 +109,14 @@ router.get('/', async (req, res) => {
         dashboardData.performance.thisMonth.properties = parseInt(propStats.this_month) || 0;
       }
 
-      // Get recent properties
+      // Get recent properties - use same logic as properties endpoint
       const recentPropsResult = await pool.query(`
         SELECT id, title, type, price, status, address, created_at
-        FROM properties 
-        WHERE agency_id = $1 
-        ORDER BY created_at DESC 
+        FROM properties
+        WHERE agency_id = $1 OR listed_by = $2
+        ORDER BY created_at DESC
         LIMIT 10
-      `, [agencyId]);
+      `, [agencyId, userId]);
 
       dashboardData.recentProperties = recentPropsResult.rows.map(prop => ({
         id: prop.id,
