@@ -639,6 +639,104 @@ app.post('/api/create-demo-user', async (req, res) => {
   }
 });
 
+// Endpoint to populate test data for a specific agency
+app.post('/api/populate-test-data', async (req, res) => {
+  try {
+    const { agency_id, user_id } = req.body;
+
+    if (!agency_id || !user_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'agency_id and user_id are required'
+      });
+    }
+
+    console.log(`🔄 Populating test data for agency: ${agency_id}, user: ${user_id}`);
+
+    // Create test leads
+    const testLeads = [];
+    for (let i = 1; i <= 15; i++) {
+      const lead = await models.Lead.create({
+        first_name: `Client ${i}`,
+        last_name: 'Prospect',
+        email: `client${i}@example.com`,
+        phone: `+155512345${i.toString().padStart(2, '0')}`,
+        city: 'Paris',
+        status: i <= 3 ? 'closed_won' : (i <= 8 ? 'qualified' : 'new'),
+        source: ['website', 'referral', 'google', 'facebook'][i % 4],
+        budget_min: 300000 + (i * 50000),
+        budget_max: 500000 + (i * 100000),
+        property_type: ['apartment', 'house', 'condo', 'villa'][i % 4],
+        bedrooms: (i % 4) + 1,
+        bathrooms: (i % 3) + 1,
+        notes: `Test lead ${i} - interested in ${['apartment', 'house', 'condo', 'villa'][i % 4]}`,
+        priority: i <= 5 ? 'high' : (i <= 10 ? 'medium' : 'low'),
+        score: 50 + (i * 3),
+        agency_id: agency_id,
+        assigned_to: user_id
+      });
+      testLeads.push(lead);
+    }
+
+    // Create test properties
+    const testProperties = [];
+    for (let i = 1; i <= 15; i++) {
+      const property = await models.Property.create({
+        title: `Property ${i} - ${['House', 'Condo', 'Villa', 'Apartment'][i % 4]}`,
+        description: `Beautiful ${['house', 'condo', 'villa', 'apartment'][i % 4]} in prime location`,
+        price: 400000 + (i * 100000),
+        property_type: ['house', 'condo', 'villa', 'apartment'][i % 4],
+        bedrooms: (i % 4) + 1,
+        bathrooms: (i % 3) + 1,
+        square_feet: 1000 + (i * 200),
+        address: `${i} Test Street`,
+        city: 'Paris',
+        state: 'Île-de-France',
+        zip_code: `7500${i}`,
+        status: i <= 10 ? 'active' : 'sold',
+        agency_id: agency_id,
+        listed_by: user_id
+      });
+      testProperties.push(property);
+    }
+
+    // Create test team members
+    const testTeamMembers = [];
+    for (let i = 1001; i <= 1109; i++) {
+      const member = await models.User.create({
+        email: `agent${i}@leadestate.com`,
+        password: 'agent123',
+        first_name: `Agent ${i}`,
+        last_name: ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones'][i % 5],
+        role: i <= 1005 ? 'super_agent' : 'agent',
+        phone: `+1555${i}`,
+        agency_id: agency_id,
+        status: 'active',
+        email_verified: true
+      });
+      testTeamMembers.push(member);
+    }
+
+    res.json({
+      success: true,
+      message: `Test data populated successfully for agency ${agency_id}`,
+      data: {
+        leads: testLeads.length,
+        properties: testProperties.length,
+        teamMembers: testTeamMembers.length
+      }
+    });
+
+  } catch (error) {
+    console.error('Populate test data error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to populate test data',
+      error: error.message
+    });
+  }
+});
+
 // Basic auth routes
 app.use('/api/auth', require('./routes/auth'));
 
