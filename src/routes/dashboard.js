@@ -10,7 +10,10 @@ router.get('/', async (req, res) => {
     // Get user info from auth middleware
     const userId = req.user?.userId;
     const agencyId = req.user?.agencyId;
-    
+
+    console.log('📊 Dashboard request for user:', userId, 'agency:', agencyId);
+    console.log('📊 Full user object:', JSON.stringify(req.user, null, 2));
+
     if (!userId || !agencyId) {
       return res.status(401).json({
         success: false,
