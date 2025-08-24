@@ -23,11 +23,11 @@ const authLimiter = rateLimit({
 // Generate JWT token
 const generateToken = (user) => {
   return jwt.sign(
-    { 
-      id: user.id, 
-      email: user.email, 
+    {
+      id: user.id,
+      email: user.email,
       role: user.role,
-      agency_id: user.agency_id 
+      agency_id: user.agency_id
     },
     process.env.JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
@@ -44,7 +44,7 @@ const generateRefreshToken = (user) => {
 };
 
 // Login endpoint
-router.post('/login', 
+router.post('/login',
   authLimiter,
   [
     body('email')
@@ -164,6 +164,99 @@ router.post('/login',
   }
 );
 
+// Trial signup endpoint
+router.post('/trial-signup',
+  authLimiter,
+  [
+    body('email')
+      .isEmail()
+      .normalizeEmail()
+      .withMessage('Please provide a valid email'),
+    body('password')
+      .isLength({ min: 6 })
+      .withMessage('Password must be at least 6 characters long'),
+    body('firstName')
+      .trim()
+      .isLength({ min: 1, max: 50 })
+      .withMessage('First name is required and must be less than 50 characters'),
+    body('lastName')
+      .trim()
+      .isLength({ min: 1, max: 50 })
+      .withMessage('Last name is required and must be less than 50 characters'),
+    body('companyName')
+      .trim()
+      .isLength({ min: 1, max: 100 })
+      .withMessage('Company name is required and must be less than 100 characters')
+  ],
+  async (req, res) => {
+    try {
+      // Check validation errors
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Validation failed',
+          errors: errors.array()
+        });
+      }
+
+      const { email, password, firstName, lastName, companyName } = req.body;
+
+      // Create trial subscription using subscription service
+      const subscriptionService = require('../services/subscriptionService');
+      const result = await subscriptionService.createTrialSubscription({
+        email,
+        password,
+        firstName,
+        lastName,
+        companyName
+      }, 'starter');
+
+      // Generate JWT token for the user
+      const token = generateToken(result.user);
+
+      logger.info(`Trial signup successful for: ${result.user.id}`);
+
+      res.status(201).json({
+        success: true,
+        message: 'Trial account created successfully',
+        data: {
+          user: {
+            id: result.user.id,
+            email: result.user.email,
+            firstName: result.user.first_name,
+            lastName: result.user.last_name,
+            role: result.user.role
+          },
+          token,
+          subscription: {
+            id: result.subscription.id,
+            planName: result.plan.name,
+            trialEndDate: result.trialEndDate,
+            status: result.subscription.status
+          }
+        }
+      });
+
+    } catch (error) {
+      logger.error('Trial signup error:', error);
+
+      // Handle specific error cases
+      if (error.message.includes('email')) {
+        return res.status(400).json({
+          success: false,
+          message: 'An account with this email already exists'
+        });
+      }
+
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error'
+      });
+    }
+  }
+);
+
 // Register endpoint (for creating new users)
 router.post('/register',
   [
@@ -212,9 +305,9 @@ router.post('/register',
 
       // Check if user already exists
       const existingUser = await models.User.findOne({
-        where: { 
-          email, 
-          agency_id: agencyId 
+        where: {
+          email,
+          agency_id: agencyId
         }
       });
 
@@ -270,150 +363,5 @@ router.post('/register',
     }
   }
 );
-
-// Refresh token endpoint
-router.post('/refresh',
-  [
-    body('refreshToken')
-      .notEmpty()
-      .withMessage('Refresh token is required')
-  ],
-  async (req, res) => {
-    try {
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return res.status(400).json({
-          success: false,
-          message: 'Validation failed',
-          errors: errors.array()
-        });
-      }
-
-      const { refreshToken } = req.body;
-
-      // Verify refresh token
-      const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
-      
-      if (decoded.type !== 'refresh') {
-        return res.status(401).json({
-          success: false,
-          message: 'Invalid refresh token'
-        });
-      }
-
-      // Get models
-      const models = getModels();
-      if (!models || !models.User) {
-        return res.status(500).json({
-          success: false,
-          message: 'Database not initialized'
-        });
-      }
-
-      // Find user
-      const user = await models.User.findByPk(decoded.id);
-      if (!user || user.status !== 'active') {
-        return res.status(401).json({
-          success: false,
-          message: 'User not found or inactive'
-        });
-      }
-
-      // Generate new tokens
-      const newToken = generateToken(user);
-      const newRefreshToken = generateRefreshToken(user);
-
-      res.json({
-        success: true,
-        message: 'Token refreshed successfully',
-        data: {
-          token: newToken,
-          refreshToken: newRefreshToken,
-          expiresIn: process.env.JWT_EXPIRES_IN || '7d'
-        }
-      });
-
-    } catch (error) {
-      if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-        return res.status(401).json({
-          success: false,
-          message: 'Invalid or expired refresh token'
-        });
-      }
-
-      logger.error('Token refresh error:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Internal server error'
-      });
-    }
-  }
-);
-
-// Logout endpoint
-router.post('/logout', (req, res) => {
-  // In a stateless JWT system, logout is handled client-side
-  // Here we could implement token blacklisting if needed
-  res.json({
-    success: true,
-    message: 'Logged out successfully'
-  });
-});
-
-// Verify token endpoint
-router.get('/verify', async (req, res) => {
-  try {
-    const token = req.headers.authorization?.replace('Bearer ', '');
-    
-    if (!token) {
-      return res.status(401).json({
-        success: false,
-        message: 'No token provided'
-      });
-    }
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-    // Get models
-    const models = getModels();
-    if (!models || !models.User) {
-      return res.status(500).json({
-        success: false,
-        message: 'Database not initialized'
-      });
-    }
-
-    const user = await models.User.findByPk(decoded.id);
-
-    if (!user || user.status !== 'active') {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid token or user not found'
-      });
-    }
-
-    res.json({
-      success: true,
-      message: 'Token is valid',
-      data: {
-        user: user.toJSON()
-      }
-    });
-
-  } catch (error) {
-    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid or expired token'
-      });
-    }
-
-    logger.error('Token verification error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error'
-    });
-  }
-});
 
 module.exports = router;
