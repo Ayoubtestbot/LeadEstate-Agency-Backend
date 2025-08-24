@@ -1,43 +1,57 @@
-const axios = require('axios');
+const nodemailer = require('nodemailer');
 const logger = require('../utils/logger');
 
-class TrialEmailService {
+class BrevoSMTPEmailService {
   constructor() {
-    this.apiKey = process.env.BREVO_API_KEY;
-    this.apiUrl = process.env.BREVO_API_URL || 'https://api.brevo.com/v3';
-    this.senderEmail = process.env.BREVO_SENDER_EMAIL;
+    this.smtpKey = process.env.BREVO_SMTP_KEY;
+    this.smtpHost = process.env.BREVO_SMTP_HOST || 'smtp-relay.brevo.com';
+    this.smtpPort = process.env.BREVO_SMTP_PORT || 587;
+    this.smtpUser = process.env.BREVO_SMTP_USER;
+    this.senderEmail = process.env.BREVO_SENDER_EMAIL || this.smtpUser;
     this.senderName = process.env.BREVO_SENDER_NAME || 'LeadEstate';
     
-    if (!this.apiKey) {
-      logger.warn('Brevo API key not configured. Trial email functionality will be disabled.');
+    if (this.smtpKey && this.smtpUser) {
+      this.transporter = nodemailer.createTransporter({
+        host: this.smtpHost,
+        port: this.smtpPort,
+        secure: false, // true for 465, false for other ports
+        auth: {
+          user: this.smtpUser,
+          pass: this.smtpKey
+        },
+        tls: {
+          rejectUnauthorized: false
+        }
+      });
+      
+      logger.info('âœ… Brevo SMTP email service initialized');
+      logger.info('ðŸ” SMTP Configuration:', {
+        host: this.smtpHost,
+        port: this.smtpPort,
+        user: this.smtpUser,
+        senderEmail: this.senderEmail,
+        senderName: this.senderName
+      });
+    } else {
+      logger.warn('âš 0️‏ Brevo SMTP not configured - email functionality will be disabled');
+      logger.warn('Missing:', {
+        smtpKey: this.smtpKey ? 'SET' : 'NOT SET',
+        smtpUser: this.smtpUser ? 'SET' : 'NOT SET'
+      });
     }
-
-    this.client = axios.create({
-      baseURL: this.apiUrl,
-      headers: {
-        'api-key': this.apiKey,
-        'Content-Type': 'application/json'
-      }
-    });
   }
 
   async sendTrialWelcomeEmail(options) {
-    logger.info('ðŸ” TrialEmailService.sendTrialWelcomeEmail called with options:', options);
-    logger.info('ðŸ” Brevo configuration:', {
-      apiKey: this.apiKey ? 'SET' : 'NOT SET',
-      apiUrl: this.apiUrl,
-      senderEmail: this.senderEmail,
-      senderName: this.senderName
-    });
-
-    if (!this.apiKey) {
-      logger.warn('Brevo not configured, skipping trial welcome email');
-      return { success: false, error: 'Brevo not configured' };
+    logger.info('ðŸ” BrevoSMTPEmailService.sendTrialWelcomeEmail called with options:', options);
+    
+    if (!this.transporter) {
+      logger.warn('Brevo SMTP not configured, skipping trial welcome email');
+      return { success: false, error: 'Brevo SMTP not configured' };
     }
 
     const { userEmail, userName, planName, trialEndDate } = options;
 
-    const subject = `Welcome to LeadEstate! Your ${planName} trial has started ðŸŽ‰`;
+    const subject = `Welcome to LeadEstate! Your ${planName} trial has started ðŸŽ‰%;
 
     const htmlContent = `
       <!DOCTYPE html>
@@ -71,7 +85,7 @@ class TrialEmailService {
           </div>
 
           <div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 8px; margin: 20px 0;">
-            <p style="margin: 0;"><strong>â° Trial expires:</strong> ${new Date(trialEndDate).toLocaleDateString('en-US', {
+            <p style="margin: 0;"><strong>â¯  Trial expires:</strong> ${new Date(trialEndDate).toLocaleDateString('en-US', {
               weekday: 'long',
               year: 'numeric',
               month: 'long',
@@ -86,7 +100,7 @@ class TrialEmailService {
             </a>
           </div>
 
-          <h3 style="color: #333;">ðŸš€ Quick Start Tips:</h3>
+          <h3 style="color: #333;">ðŸš‬ Quick Start Tips:</h3>
           <ol>
             <li><strong>Import your leads:</strong> Use our CSV import feature to get started quickly</li>
             <li><strong>Set up your team:</strong> Invite team members to collaborate</li>
@@ -150,38 +164,57 @@ Best regards,
 The LeadEstate Team`;
 
     try {
-      const emailData = {
-        sender: {
-          name: this.senderName,
-          email: this.senderEmail
-        },
-        to: [{ email: userEmail }],
+      const mailOptions = {
+        from: `${this.senderName} <${this.senderEmail}>`,
+        to: userEmail,
         subject: subject,
-        htmlContent: htmlContent,
-        textContent: textContent,
-        tags: ['trial', 'welcome', 'onboarding']
+        html: htmlContent,
+        text: textContent
       };
 
-      const response = await this.client.post('/smtp/email', emailData);
+      logger.info('ðŸ“§ Attempting to send email with options:', {
+        from: mailOptions.from,
+        to: mailOptions.to,
+        subject: mailOptions.subject
+      });
+
+      const result = await this.transporter.sendMail(mailOptions);
       
-      logger.info(`âœ… Trial welcome email sent successfully via Brevo: ${response.data.messageId}`);
+      logger.info(`âœ… Trial welcome email sent successfully via Brevo SMTP: ${result.messageId}`);
       
       return {
         success: true,
-        messageId: response.data.messageId,
-        data: response.data
+        messageId: result.messageId,
+        data: result
       };
 
     } catch (error) {
-      logger.error('âŒ Brevo trial email send failed:', error.response?.data || error.message);
+      logger.error('âŒ Brevo SMTP email send failed:', error.message);
+      logger.error('âŒ Full error details:', error);
       
       return {
         success: false,
-        error: error.response?.data?.message || error.message,
-        code: error.response?.status
+        error: error.message,
+        details: error
       };
+    }
+  }
+
+  // Test email connection
+  async testConnection() {
+    if (!this.transporter) {
+      return { success: false, error: 'SMTP not configured' };
+    }
+
+    try {
+      await this.transporter.verify();
+      logger.info('âœ… Brevo SMTP connection verified successfully');
+      return { success: true, message: 'SMTP connection verified' };
+    } catch (error) {
+      logger.error('âŒ Brevo SMTP connection failed:', error.message);
+      return { success: false, error: error.message };
     }
   }
 }
 
-module.exports = new TrialEmailService();
+module.exports = new BrevoSMTPEmailService();
