@@ -1,5 +1,5 @@
 const { getModels } = require('../models');
-const brevoService = require('./brevoService');
+const trialEmailService = require('./trialEmailService');
 const logger = require('../utils/logger');
 
 class SubscriptionService {
@@ -131,7 +131,7 @@ class SubscriptionService {
         processed_at: new Date()
       });
 
-      // Send welcome email
+      // Send welcome email using dedicated trial email service
       try {
         logger.info('ðŸ“§ Attempting to send trial welcome email to:', user.email);
         logger.info('ðŸ“§ Email data:', {
@@ -141,7 +141,7 @@ class SubscriptionService {
           trialEndDate: trialEndDate
         });
         
-        const emailResult = await brevoService.sendTrialWelcomeEmail({
+        const emailResult = await trialEmailService.sendTrialWelcomeEmail({
           userEmail: user.email,
           userName: user.first_name,
           planName: plan.display_name,
