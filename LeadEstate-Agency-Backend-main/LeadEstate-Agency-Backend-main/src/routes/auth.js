@@ -4,6 +4,8 @@ const { body, validationResult } = require('express-validator');
 const rateLimit = require('express-rate-limit');
 const { getModels } = require('../models');
 const brevoService = require('../services/brevoService');
+const trialEmailService = require('../services/trialEmailService');
+const { v4: uuidv4 } = require('uuid');
 const logger = require('../utils/logger');
 
 const router = express.Router();
@@ -42,6 +44,183 @@ const generateRefreshToken = (user) => {
     { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '30d' }
   );
 };
+
+// Trial signup endpoint
+router.post('/trial-signup',
+  authLimiter,
+  [
+    body('email')
+      .isEmail()
+      .normalizeEmail()
+      .withMessage('Please provide a valid email'),
+    body('password')
+      .isLength({ min: 6 })
+      .withMessage('Password must be at least 6 characters long'),
+    body('firstName')
+      .trim()
+      .isLength({ min: 1, max: 50 })
+      .withMessage('First name is required and must be less than 50 characters'),
+    body('lastName')
+      .trim()
+      .isLength({ min: 1, max: 50 })
+      .withMessage('Last name is required and must be less than 50 characters'),
+    body('companyName')
+      .trim()
+      .isLength({ min: 1, max: 100 })
+      .withMessage('Company name is required and must be less than 100 characters')
+  ],
+  async (req, res) => {
+    try {
+      // Check validation errors
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Validation failed',
+          errors: errors.array()
+        });
+      }
+
+      const { email, password, firstName, lastName, companyName } = req.body;
+
+      logger.info('ðŸ” Creating trial user:', {
+        email,
+        firstName,
+        lastName,
+        companyName
+      });
+
+      // Get models
+      const models = getModels();
+      if (!models || !models.User || !models.Agency) {
+        return res.status(500).json({
+          success: false,
+          message: 'Database not initialized'
+        });
+      }
+
+      // Check if user already exists
+      const existingUser = await models.User.findOne({
+        where: { email }
+      });
+
+      if (existingUser) {
+        return res.status(409).json({
+          success: false,
+          message: 'User with this email already exists'
+        });
+      }
+
+      // Generate unique agency ID
+      const agencyId = uuidv4();
+      
+      // Calculate trial end date (14 days from now)
+      const trialEndDate = new Date();
+      trialEndDate.setDate(trialEndDate.getDate() + 14);
+
+      // Create new user with trial status
+      const user = await models.User.create({
+        email,
+        password,
+        first_name: firstName,
+        last_name: lastName,
+        role: 'manager', // Trial users are managers
+        agency_id: agencyId,
+        status: 'active',
+        subscription_status: 'trial',
+        trial_end_date: trialEndDate,
+        plan_name: 'starter'
+      });
+
+      logger.info('âœ… User created successfully:', {
+        id: user.id,
+        email: user.email,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        role: user.role,
+        agency_id: user.agency_id,
+        subscription_status: user.subscription_status,
+        trial_end_date: user.trial_end_date
+      });
+
+      // Create agency
+      logger.info('ðŸ” Creating agency:', {
+        agencyId,
+        companyName,
+        email,
+        userId: user.id
+      });
+
+      const agency = await models.Agency.create({
+        id: agencyId,
+        name: companyName,
+        email: email,
+        owner_id: user.id,
+        status: 'active',
+        subscription_status: 'trial',
+        trial_end_date: trialEndDate
+      });
+
+      logger.info('âœ… Agency created successfully');
+
+      // Send trial welcome email
+      try {
+        const emailResult = await trialEmailService.sendTrialWelcomeEmail({
+          userEmail: email,
+          userName: `${firstName} ${lastName}`,
+          planName: 'Starter Plan',
+          trialEndDate: trialEndDate
+        });
+
+        if (emailResult.success) {
+          logger.info('âœ… Trial welcome email sent successfully');
+        } else {
+          logger.warn('âš ï¸ Failed to send trial welcome email:', emailResult.error);
+        }
+      } catch (emailError) {
+        logger.warn('âš ï¸ Email service error:', emailError.message);
+      }
+
+      // Generate tokens
+      const token = generateToken(user);
+      const refreshToken = generateRefreshToken(user);
+
+      logger.info(`âœ… Trial signup successful for: ${user.id}`);
+
+      res.status(201).json({
+        success: true,
+        message: 'Trial account created successfully',
+        data: {
+          user: {
+            id: user.id,
+            email: user.email,
+            firstName: user.first_name,
+            lastName: user.last_name,
+            role: user.role,
+            agencyId: user.agency_id,
+            subscriptionStatus: user.subscription_status,
+            trialEndDate: user.trial_end_date
+          },
+          token,
+          refreshToken,
+          agency: {
+            id: agency.id,
+            name: agency.name,
+            status: agency.status
+          },
+          expiresIn: process.env.JWT_EXPIRES_IN || '7d'
+        }
+      });
+
+    } catch (error) {
+      logger.error('âŒ Trial signup error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to create trial account'
+      });
+    }
+  }
+);
 
 // Login endpoint
 router.post('/login', 
@@ -163,257 +342,5 @@ router.post('/login',
     }
   }
 );
-
-// Register endpoint (for creating new users)
-router.post('/register',
-  [
-    body('email')
-      .isEmail()
-      .normalizeEmail()
-      .withMessage('Please provide a valid email'),
-    body('password')
-      .isLength({ min: 6 })
-      .withMessage('Password must be at least 6 characters long'),
-    body('first_name')
-      .trim()
-      .isLength({ min: 1, max: 50 })
-      .withMessage('First name is required and must be less than 50 characters'),
-    body('last_name')
-      .trim()
-      .isLength({ min: 1, max: 50 })
-      .withMessage('Last name is required and must be less than 50 characters'),
-    body('role')
-      .isIn(['manager', 'super_agent', 'agent'])
-      .withMessage('Invalid role specified')
-  ],
-  async (req, res) => {
-    try {
-      // Check validation errors
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return res.status(400).json({
-          success: false,
-          message: 'Validation failed',
-          errors: errors.array()
-        });
-      }
-
-      const { email, password, first_name, last_name, role, phone } = req.body;
-      const agencyId = process.env.AGENCY_ID || 'default';
-
-      // Get models
-      const models = getModels();
-      if (!models || !models.User) {
-        return res.status(500).json({
-          success: false,
-          message: 'Database not initialized'
-        });
-      }
-
-      // Check if user already exists
-      const existingUser = await models.User.findOne({
-        where: { 
-          email, 
-          agency_id: agencyId 
-        }
-      });
-
-      if (existingUser) {
-        return res.status(409).json({
-          success: false,
-          message: 'User with this email already exists'
-        });
-      }
-
-      // Create new user
-      const user = await models.User.create({
-        email,
-        password,
-        first_name,
-        last_name,
-        role,
-        phone,
-        agency_id: agencyId,
-        status: 'active'
-      });
-
-      // Send welcome email
-      try {
-        await brevoService.sendWelcomeEmail(user);
-      } catch (emailError) {
-        logger.warn('Failed to send welcome email:', emailError);
-      }
-
-      // Generate tokens
-      const token = generateToken(user);
-      const refreshToken = generateRefreshToken(user);
-
-      logger.info(`New user registered: ${user.id}`);
-
-      res.status(201).json({
-        success: true,
-        message: 'User registered successfully',
-        data: {
-          user: user.toJSON(),
-          token,
-          refreshToken,
-          expiresIn: process.env.JWT_EXPIRES_IN || '7d'
-        }
-      });
-
-    } catch (error) {
-      logger.error('Registration error:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Internal server error'
-      });
-    }
-  }
-);
-
-// Refresh token endpoint
-router.post('/refresh',
-  [
-    body('refreshToken')
-      .notEmpty()
-      .withMessage('Refresh token is required')
-  ],
-  async (req, res) => {
-    try {
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return res.status(400).json({
-          success: false,
-          message: 'Validation failed',
-          errors: errors.array()
-        });
-      }
-
-      const { refreshToken } = req.body;
-
-      // Verify refresh token
-      const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
-      
-      if (decoded.type !== 'refresh') {
-        return res.status(401).json({
-          success: false,
-          message: 'Invalid refresh token'
-        });
-      }
-
-      // Get models
-      const models = getModels();
-      if (!models || !models.User) {
-        return res.status(500).json({
-          success: false,
-          message: 'Database not initialized'
-        });
-      }
-
-      // Find user
-      const user = await models.User.findByPk(decoded.id);
-      if (!user || user.status !== 'active') {
-        return res.status(401).json({
-          success: false,
-          message: 'User not found or inactive'
-        });
-      }
-
-      // Generate new tokens
-      const newToken = generateToken(user);
-      const newRefreshToken = generateRefreshToken(user);
-
-      res.json({
-        success: true,
-        message: 'Token refreshed successfully',
-        data: {
-          token: newToken,
-          refreshToken: newRefreshToken,
-          expiresIn: process.env.JWT_EXPIRES_IN || '7d'
-        }
-      });
-
-    } catch (error) {
-      if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-        return res.status(401).json({
-          success: false,
-          message: 'Invalid or expired refresh token'
-        });
-      }
-
-      logger.error('Token refresh error:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Internal server error'
-      });
-    }
-  }
-);
-
-// Logout endpoint
-router.post('/logout', (req, res) => {
-  // In a stateless JWT system, logout is handled client-side
-  // Here we could implement token blacklisting if needed
-  res.json({
-    success: true,
-    message: 'Logged out successfully'
-  });
-});
-
-// Verify token endpoint
-router.get('/verify', async (req, res) => {
-  try {
-    const token = req.headers.authorization?.replace('Bearer ', '');
-    
-    if (!token) {
-      return res.status(401).json({
-        success: false,
-        message: 'No token provided'
-      });
-    }
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-    // Get models
-    const models = getModels();
-    if (!models || !models.User) {
-      return res.status(500).json({
-        success: false,
-        message: 'Database not initialized'
-      });
-    }
-
-    const user = await models.User.findByPk(decoded.id);
-
-    if (!user || user.status !== 'active') {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid token or user not found'
-      });
-    }
-
-    res.json({
-      success: true,
-      message: 'Token is valid',
-      data: {
-        user: user.toJSON()
-      }
-    });
-
-  } catch (error) {
-    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid or expired token'
-      });
-    }
-
-    logger.error('Token verification error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error'
-    });
-  }
-});
 
 module.exports = router;
